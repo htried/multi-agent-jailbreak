@@ -1,0 +1,13 @@
+requests==2.32.3
+python-dotenv==1.0.1
+ratelimit==2.2.1
+urllib3==2.3.0
+pytest==8.3.4
+autogen-core==0.4.2
+autogen-agentchat==0.4.2
+autogen-ext[magentic-one,openai]==0.4.2
+autogen-openaiext-client==0.0.1.dev1
+playwright==1.49.1
+asyncio==3.4.3
+aiohttp==3.11.11
+typing-extensions==4.12.2
