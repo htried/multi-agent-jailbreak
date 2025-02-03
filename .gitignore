@@ -13,3 +13,8 @@ app/logs/*
 
 # Docker
 .docker/
+
+autogen-openaiext-client/
+
+tmp_code_*
+alembic/

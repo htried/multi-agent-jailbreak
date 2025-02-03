@@ -1,4 +1,4 @@
-# Secure Agent Project
+# Multi-Agent Jailbreaking
 
 A secure Docker-based environment for running automated browser tasks with Playwright.
 
