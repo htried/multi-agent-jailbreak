@@ -3,7 +3,7 @@ import io
 import asyncio
 from typing import List, Dict, Any
 from playwright.async_api import async_playwright
-from web_surfer.playwright_controller import PlaywrightController
+from autogen_ext.agents.web_surfer.playwright_controller import PlaywrightController
 import PIL.Image
 from autogen_core import Image as AGImage
 import openai

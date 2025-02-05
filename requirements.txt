@@ -5,7 +5,8 @@ urllib3==2.3.0
 pytest==8.3.4
 autogen-core==0.4.4
 autogen-agentchat==0.4.4
-autogen-ext[magentic-one,openai]==0.4.4
+autogen-ext[magentic-one,openai,video-surfer]==0.4.4
 asyncio==3.4.3
 aiohttp==3.11.11
 typing-extensions==4.12.2
+moviepy==2.1.2

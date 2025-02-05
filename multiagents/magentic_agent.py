@@ -10,7 +10,7 @@ from autogen_core.models import ChatCompletionClient
 from autogen_ext.agents.file_surfer import FileSurfer
 from autogen_ext.agents.magentic_one import MagenticOneCoderAgent
 from autogen_ext.agents.web_surfer import MultimodalWebSurfer
-from autogen_ext.code_executors.docker import DockerCommandLineCodeExecutor
+from autogen_ext.agents.video_surfer import VideoSurfer
 from autogen_ext.code_executors.local import LocalCommandLineCodeExecutor
 from autogen_ext.models.openai._openai_client import BaseOpenAIChatCompletionClient
 
@@ -133,10 +133,11 @@ class MagenticOneDocker(MagenticOneGroupChat):
 
         fs = FileSurfer("FileSurfer", model_client=client)
         ws = MultimodalWebSurfer("WebSurfer", model_client=client, debug_dir="debug", to_save_screenshots=True, downloads_folder="downloads")
+        vs = VideoSurfer("VideoSurfer", model_client=client)
         coder = MagenticOneCoderAgent("Coder", model_client=client)
         # executor = CodeExecutorAgent("Executor", code_executor=DockerCommandLineCodeExecutor())
         executor = CodeExecutorAgent("Executor", code_executor=LocalCommandLineCodeExecutor())
-        agents: List[ChatAgent] = [fs, ws, coder, executor]
+        agents: List[ChatAgent] = [vs, fs, ws, coder, executor]
         if hil_mode:
             user_proxy = UserProxyAgent("User", input_func=input_func)
             agents.append(user_proxy)

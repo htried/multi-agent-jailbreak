@@ -73,13 +73,6 @@ def setup_logging(log_level=logging.INFO):
     logger = logging.getLogger()
     logger.setLevel(log_level)
     
-    # Console handler
-    console_handler = logging.StreamHandler()
-    console_handler.setLevel(log_level)
-    console_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    console_handler.setFormatter(console_formatter)
-    
-    # File handler with rotation
     file_handler = RotatingFileHandler(
         'logs/app.log',
         maxBytes=10*1024*1024,  # 10MB
@@ -89,8 +82,6 @@ def setup_logging(log_level=logging.INFO):
     file_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     file_handler.setFormatter(file_formatter)
     
-    # Add handlers to the logger
-    logger.addHandler(console_handler)
     logger.addHandler(file_handler)
     
     # Also set up the EVENT_LOGGER specifically
