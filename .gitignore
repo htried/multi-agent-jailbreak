@@ -8,6 +8,7 @@ venv/
 .env
 
 # Logs
+logs/
 *.log
 app/logs/*
 
@@ -18,3 +19,7 @@ autogen-openaiext-client/
 
 tmp_code_*
 alembic/
+
+downloads/
+debug/
+keys/

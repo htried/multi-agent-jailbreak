@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from autogen_core import SingleThreadedAgentRuntime
 from autogen_core.models import ModelInfo
 from autogen_ext.models.openai import OpenAIChatCompletionClient
-from agent import MagenticOneDocker
+from multiagents.magentic_agent import MagenticOneDocker
 from autogen_agentchat import EVENT_LOGGER_NAME
 from autogen_agentchat.ui import Console
 import logging

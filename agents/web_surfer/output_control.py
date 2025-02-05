@@ -125,7 +125,7 @@ def create_messages(web_response: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     ]
 
 if __name__ == "__main__":
-    url = "https://haltriedman.com"
+    url = "https://test.haltriedman.com"
     content = asyncio.run(get_tool_response(url, "visit_url", url))
     messages = create_messages(content)
     print(messages)
