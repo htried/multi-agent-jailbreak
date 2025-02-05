@@ -19,7 +19,7 @@ AsyncInputFunc = Callable[[str, Optional[CancellationToken]], Awaitable[str]]
 InputFuncType = Union[SyncInputFunc, AsyncInputFunc]
 
 
-class MagenticOneDocker(MagenticOneGroupChat):
+class MagenticOne(MagenticOneGroupChat):
     """
     MagenticOne is a specialized group chat class that integrates various agents
     such as FileSurfer, WebSurfer, Coder, and Executor to solve complex tasks.
