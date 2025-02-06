@@ -1,8 +1,6 @@
 import warnings
-from typing import List
 
-from autogen_agentchat.agents import CodeExecutorAgent, AssistantAgent
-from autogen_agentchat.base import ChatAgent
+from autogen_agentchat.agents import CodeExecutorAgent
 from autogen_agentchat.teams import RoundRobinGroupChat
 from autogen_agentchat.conditions import TextMentionTermination
 from autogen_core.models import ChatCompletionClient
