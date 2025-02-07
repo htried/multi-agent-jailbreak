@@ -138,6 +138,8 @@ class MagenticOne(MagenticOneGroupChat):
         # executor = CodeExecutorAgent("Executor", code_executor=DockerCommandLineCodeExecutor())
         executor = CodeExecutorAgent("Executor", code_executor=LocalCommandLineCodeExecutor())
         agents: List[ChatAgent] = [vs, fs, ws, coder, executor]
+
+        print(f"Agents: {[a.name for a in agents]}")
         if hil_mode:
             user_proxy = UserProxyAgent("User", input_func=input_func)
             agents.append(user_proxy)

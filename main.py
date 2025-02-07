@@ -6,6 +6,7 @@ from autogen_ext.models.openai import OpenAIChatCompletionClient
 from multiagents.magentic_one import MagenticOne
 from multiagents.round_robin import RoundRobin
 from multiagents.selector import Selector
+from multiagents.swarm.swarm import SwarmTeam
 from autogen_agentchat import EVENT_LOGGER_NAME
 from autogen_agentchat.ui import Console
 import logging
@@ -42,8 +43,8 @@ async def main(hil_mode: bool, query: str, model: str, mas_type: str, include_we
                 agent = RoundRobin(client=client, max_turns=20, include_web_surfer=include_web_surfer, include_video_surfer=include_video_surfer)
             elif mas_type == "selector":
                 agent = Selector(client=client, max_turns=20, include_web_surfer=include_web_surfer, include_video_surfer=include_video_surfer)
-            # elif mas_type == "swarm":
-            #     agent = Swarm(client=client, max_turns=20)
+            elif mas_type == "swarm":
+                agent = SwarmTeam(client=client, max_turns=20)
             await Console(agent.run_stream(task=query))
         except Exception as e:
             print(f"Error during agent execution: {str(e)}")

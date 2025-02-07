@@ -40,7 +40,7 @@ class Selector(SelectorGroupChat):
 
         executor = CodeExecutorAgent("Executor", code_executor=LocalCommandLineCodeExecutor())
         agents.append(executor)
-        print(f"Agents: {agents}")
+        print(f"Agents: {[a.name for a in agents]}")
 
         termination = TextMentionTermination("TERMINATE")
 

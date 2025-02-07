@@ -3,10 +3,10 @@ python-dotenv==1.0.1
 ratelimit==2.2.1
 urllib3==2.3.0
 pytest==8.3.4
-autogen-core==0.4.4
-autogen-agentchat==0.4.4
-autogen-ext[magentic-one,openai,video-surfer]==0.4.4
+autogen-core==0.4.5
+autogen-agentchat==0.4.5
+autogen-ext[magentic-one,openai,video-surfer]==0.4.5
 asyncio==3.4.3
 aiohttp==3.11.11
 typing-extensions==4.12.2
-moviepy==2.1.2
+# moviepy==2.1.2
