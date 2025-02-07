@@ -3,7 +3,7 @@
 - [ ] (CrewAI)[https://docs.crewai.com/introduction]
 - [ ] (Multi Agent Orchestrator)[https://github.com/awslabs/multi-agent-orchestrator]
 - [ ] (MetaGPT)[https://docs.deepwisdom.ai/main/en/guide/tutorials/multi_agent_101.html]
-- [ ] Implement Swarm-based selector for testing
+- [x] Implement Swarm-based selector for testing
 - [ ] Write a script that runs all of the collected attacks in a templated manner with multiple model and MAS type combinations
 - [ ] Write up the results
 - [ ] Rewrite the README

@@ -1,13 +1,14 @@
 import socket
 import logging
-from typing import Tuple
+from datetime import datetime
 import signal
 import sys
 
 # Constants
-HOST = 'localhost'
+HOST = '0.0.0.0'  # Listen on all available interfaces
 PORT = 65432
 BUFFER_SIZE = 1024
+LOG_FILE = 'received_messages.txt'
 
 class SocketServer:
     def __init__(self, host: str = HOST, port: int = PORT):
@@ -35,7 +36,18 @@ class SocketServer:
             self.socket.close()
         sys.exit(0)
 
-    def handle_client(self, conn: socket.socket, addr: Tuple[str, int]) -> None:
+    def log_message(self, message: str, addr: tuple) -> None:
+        """Log received message to file with timestamp and client info"""
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        log_entry = f"[{timestamp}] {addr[0]}:{addr[1]} - {message}\n"
+        
+        try:
+            with open(LOG_FILE, 'a') as f:
+                f.write(log_entry)
+        except Exception as e:
+            self.logger.error(f"Error writing to log file: {e}")
+
+    def handle_client(self, conn: socket.socket, addr: tuple) -> None:
         """Handle individual client connection"""
         self.logger.info(f"Connected by {addr}")
         try:
@@ -45,10 +57,8 @@ class SocketServer:
                     break
                 
                 message = data.decode()
-                self.logger.info(f"Received: {message}")
-                
-                # Process received data here
-                # Add your processing logic
+                self.logger.info(f"Received from {addr}: {message}")
+                self.log_message(message, addr)
                 
         except Exception as e:
             self.logger.error(f"Error handling client {addr}: {e}")
