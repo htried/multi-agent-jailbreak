@@ -1,10 +1,16 @@
 # Python
+content/file_surfer/
+content/metagpt-data-interpreter/
+content/web_surfer/
+workspace/
+metagpt/
+autogen/
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
-venv/
+*venv/
 .env
 
 # Logs
