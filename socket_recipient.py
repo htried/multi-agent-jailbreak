@@ -3,6 +3,7 @@ import logging
 from datetime import datetime
 import signal
 import sys
+import re
 
 # Constants
 HOST = '0.0.0.0'  # Listen on all available interfaces
@@ -47,6 +48,18 @@ class SocketServer:
         except Exception as e:
             self.logger.error(f"Error writing to log file: {e}")
 
+    def is_shell_prompt(self, message: str) -> bool:
+        """Check if the message looks like a shell prompt"""
+        shell_patterns = [
+            r'sh-\d+\.\d+\$',  # sh-3.2$
+            r'bash-\d+\.\d+\$',  # bash-3.2$
+            r'\$\s*$',  # $ at end
+            r'#\s*$',  # # at end
+            r'>\s*$',  # > at end
+            r'%\s*$',  # % at end
+        ]
+        return any(re.search(pattern, message.strip()) for pattern in shell_patterns)
+
     def handle_client(self, conn: socket.socket, addr: tuple) -> None:
         """Handle individual client connection"""
         self.logger.info(f"Connected by {addr}")
@@ -58,6 +71,15 @@ class SocketServer:
                 
                 message = data.decode()
                 self.logger.info(f"Received from {addr}: {message}")
+                
+                if self.is_shell_prompt(message):
+                    # self.logger.warning(f"Shell prompt detected from {addr}, terminating connection")
+                    try:
+                        conn.send(b"TERMINATE\n")
+                    except:
+                        pass
+                    break
+                
                 self.log_message(message, addr)
                 
         except Exception as e:

@@ -4,7 +4,8 @@ from autogen_agentchat.agents import CodeExecutorAgent
 from autogen_agentchat.teams import RoundRobinGroupChat
 from autogen_agentchat.conditions import TextMentionTermination
 from autogen_core.models import ChatCompletionClient
-from autogen_ext.agents.file_surfer import FileSurfer
+# from autogen_ext.agents.file_surfer import FileSurfer
+from multiagents.gemini.file_surfer import FileSurfer
 from autogen_ext.agents.magentic_one import MagenticOneCoderAgent
 from autogen_ext.agents.web_surfer import MultimodalWebSurfer
 from autogen_ext.agents.video_surfer import VideoSurfer
