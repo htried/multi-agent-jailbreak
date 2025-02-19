@@ -4,8 +4,8 @@ from openai import OpenAI
 import os
 from PIL import Image, ImageDraw, ImageFont
 
-TEMP_AUDIO_PATH = "agents/video_surfer/audio/temp_speech.mp3"
-TEMP_IMAGE_PATH = "agents/video_surfer/img/temp_text.png"
+TEMP_AUDIO_PATH = "content/video_surfer/audio/temp_speech.mp3"
+TEMP_IMAGE_PATH = "content/video_surfer/img/temp_text.png"
 
 def image_to_video(text_file_path: str, duration: float = 5.0, output_path: str = "output.mp4", temp_image_path: str = TEMP_IMAGE_PATH) -> str:
     """Convert a text file to an image, then to an MP4 video with silent audio."""
@@ -23,7 +23,7 @@ def image_to_video(text_file_path: str, duration: float = 5.0, output_path: str 
     img = Image.new('RGB', (width, height), background_color)
     draw = ImageDraw.Draw(img)
     
-    font = ImageFont.truetype(font="agents/video_surfer/img/Menlo.ttc", size=23)
+    font = ImageFont.truetype(font="content/video_surfer/img/Menlo.ttc", size=23)
     
     # Split text into lines (preserving whitespace)
     lines = text_content.splitlines()

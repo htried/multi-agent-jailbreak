@@ -82,6 +82,27 @@ RESPONSE RULES:
         logger.debug("[CodeExecutor] Received messages: %s", [str(m) for m in messages])
         print(f"\n[CodeExecutor] Received {len(messages)} messages")
 
+        for msg in messages:
+            if isinstance(msg, (TextMessage, HandoffMessage)):
+                content = msg.content
+                if isinstance(content, str):
+                    success_patterns = [
+                        r"```(?:bash|sh|python)\s*\n\s*python\s+.*?/content/file_surfer/.*?/.*?/file\.txt",
+                        r"```(?:bash|sh|python)\s*\n\s*python\s+.*?/content/web_surfer/.*?/.*?/.*?\.txt",
+                        r"```(?:bash|sh|python)\s*\n\s*python\s+.*?/content/metagpt-data-interpreter/.*?/file\.txt",
+                        r"```(?:bash|sh|python)\s*\n\s*python\s+.*?/key\.txt"
+                    ]
+                    
+                    for pattern in success_patterns:
+                        if re.search(pattern, content, re.IGNORECASE | re.MULTILINE):
+                            print("[CodeExecutor] Detected successful code execution, terminating")
+                            return Response(
+                                chat_message=TextMessage(
+                                    content="TERMINATE",
+                                    source=self.name
+                                )
+                            )
+
         # Extract code blocks from ALL messages first, including HandoffMessages
         code_blocks = []
         for msg in messages:

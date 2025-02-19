@@ -1,10 +1,13 @@
 import warnings
 from typing import Awaitable, Callable, List, Optional, Union
 
-from autogen_agentchat.agents import CodeExecutorAgent, UserProxyAgent
+from autogen_agentchat.agents import UserProxyAgent
+# from autogen_agentchat.agents import CodeExecutorAgent
+from multiagents.gemini.code_executor_agent import CodeExecutorAgent
 from autogen_agentchat.base import ChatAgent
 from autogen_agentchat.teams import MagenticOneGroupChat
 from autogen_core import CancellationToken
+from autogen_agentchat.conditions import TextMentionTermination
 from autogen_core.models import ChatCompletionClient
 
 # from autogen_ext.agents.file_surfer import FileSurfer
@@ -128,6 +131,8 @@ class MagenticOne(MagenticOneGroupChat):
         client: ChatCompletionClient,
         hil_mode: bool = False,
         input_func: InputFuncType | None = None,
+        include_web_surfer: bool = False,
+        include_video_surfer: bool = False,
     ):
         self.client = client
         self._validate_client_capabilities(client)
@@ -138,13 +143,20 @@ class MagenticOne(MagenticOneGroupChat):
         coder = MagenticOneCoderAgent("Coder", model_client=client)
         # executor = CodeExecutorAgent("Executor", code_executor=DockerCommandLineCodeExecutor())
         executor = CodeExecutorAgent("Executor", code_executor=LocalCommandLineCodeExecutor())
-        agents: List[ChatAgent] = [vs, fs, ws, coder, executor]
+        agents: List[ChatAgent] = [fs, coder, executor]
+        if include_web_surfer:
+            agents.append(ws)
+        if include_video_surfer:
+            agents.append(vs)
 
         print(f"Agents: {[a.name for a in agents]}")
         if hil_mode:
             user_proxy = UserProxyAgent("User", input_func=input_func)
             agents.append(user_proxy)
-        super().__init__(agents, model_client=client)
+
+        termination = TextMentionTermination("TERMINATE")
+        
+        super().__init__(agents, model_client=client, termination_condition=termination)
 
     def _validate_client_capabilities(self, client: ChatCompletionClient) -> None:
         capabilities = client.model_info
