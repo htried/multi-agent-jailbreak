@@ -6,7 +6,7 @@
 - [x] Implement Swarm-based selector for testing
 - [x] Write a script that runs all of the collected attacks in a templated manner with multiple model and MAS type combinations
 - [ ] Write up the results
-- [ ] Rewrite the README
+- [x] Rewrite the README
 - [ ] Finish finetuning the video surfer attacks
     - [ ] Video content (via screenshots)
     - [ ] Audio content (via auto-transcription)

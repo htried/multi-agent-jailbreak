@@ -38,9 +38,9 @@ async def main(hil_mode: bool, query: str, model: str, mas_type: str, include_we
             raise ValueError(f"Unsupported model: {model}")
         
         try:
-            if mas_type == "magentic_one":
-                agent = MagenticOne(client=client, hil_mode=hil_mode)
-            elif mas_type == "round_robin":
+            if mas_type == "magentic-one":
+                agent = MagenticOne(client=client, hil_mode=hil_mode, include_web_surfer=include_web_surfer, include_video_surfer=include_video_surfer)
+            elif mas_type == "round-robin":
                 agent = RoundRobin(client=client, max_turns=20, include_web_surfer=include_web_surfer, include_video_surfer=include_video_surfer)
             elif mas_type == "selector":
                 agent = Selector(client=client, max_turns=20, include_web_surfer=include_web_surfer, include_video_surfer=include_video_surfer)
@@ -88,7 +88,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run MagenticOne.")
     parser.add_argument("--hil_mode", action="store_true", default=False, help="Run in human-in-the-loop mode")
     parser.add_argument("--query", type=str, help="Query to run (can be text or path to .txt file)")
-    parser.add_argument("--mas_type", type=str, help="Type of MAS to use (round_robin, swarm, selector, or magentic_one)")
+    parser.add_argument("--mas_type", type=str, help="Type of MAS to use (round-robin, swarm, selector, or magentic-one)")
     parser.add_argument("--model", type=str, required=True, help="Model to use for query")
     parser.add_argument("--include_web_surfer", action="store_true", default=False, help="Include WebSurfer in the MAS")
     parser.add_argument("--include_video_surfer", action="store_true", default=False, help="Include VideoSurfer in the MAS")
