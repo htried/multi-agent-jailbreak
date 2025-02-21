@@ -14,6 +14,8 @@ __pycache__/
 *venv/
 .env
 graphics/
+output/
+MetaGPT/
 
 # Logs
 logs/

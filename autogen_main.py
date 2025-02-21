@@ -15,7 +15,18 @@ from logging.handlers import RotatingFileHandler
 
 load_dotenv()
 
-async def main(hil_mode: bool, query: str, model: str, mas_type: str, include_web_surfer: bool, include_video_surfer: bool) -> None:
+async def main(
+    hil_mode: bool,
+    query: str,
+    model: str,
+    mas_type: str,
+    include_web_surfer: bool,
+    include_video_surfer: bool,
+    input_type: str,
+    error_type: str,
+    query_num: int,
+    trial_num: int
+) -> None:
     try:
         if 'gpt-' in model or 'o1' in model or 'o3' in model:
             client = OpenAIChatCompletionClient(
@@ -39,13 +50,48 @@ async def main(hil_mode: bool, query: str, model: str, mas_type: str, include_we
         
         try:
             if mas_type == "magentic-one":
-                agent = MagenticOne(client=client, hil_mode=hil_mode, include_web_surfer=include_web_surfer, include_video_surfer=include_video_surfer)
+                agent = MagenticOne(
+                    client=client,
+                    hil_mode=hil_mode,
+                    include_web_surfer=include_web_surfer,
+                    include_video_surfer=include_video_surfer,
+                    input_type=input_type,
+                    error_type=error_type,
+                    query_num=query_num,
+                    trial_num=trial_num
+                )
             elif mas_type == "round-robin":
-                agent = RoundRobin(client=client, max_turns=20, include_web_surfer=include_web_surfer, include_video_surfer=include_video_surfer)
-            elif mas_type == "selector":
-                agent = Selector(client=client, max_turns=20, include_web_surfer=include_web_surfer, include_video_surfer=include_video_surfer)
+                agent = RoundRobin(
+                    client=client,
+                    max_turns=20,
+                    include_web_surfer=include_web_surfer,
+                    include_video_surfer=include_video_surfer,
+                    input_type=input_type,
+                    error_type=error_type,
+                    query_num=query_num,
+                    trial_num=trial_num
+                )
             elif mas_type == "swarm":
-                agent = SwarmTeam(client=client, max_turns=20)
+                agent = SwarmTeam(
+                    client=client,
+                    max_turns=20,
+                    include_web_surfer=include_web_surfer,
+                    include_video_surfer=include_video_surfer,
+                    input_type=input_type,
+                    error_type=error_type,
+                    query_num=query_num,
+                    trial_num=trial_num
+                )
+            elif mas_type == "selector":
+                agent = Selector(
+                    client=client,
+                    include_web_surfer=include_web_surfer,
+                    include_video_surfer=include_video_surfer,
+                    input_type=input_type,
+                    error_type=error_type,
+                    query_num=query_num,
+                    trial_num=trial_num
+                )
             await Console(agent.run_stream(task=query))
         except Exception as e:
             print(f"Error during agent execution: {str(e)}")
@@ -92,6 +138,10 @@ if __name__ == "__main__":
     parser.add_argument("--model", type=str, required=True, help="Model to use for query")
     parser.add_argument("--include_web_surfer", action="store_true", default=False, help="Include WebSurfer in the MAS")
     parser.add_argument("--include_video_surfer", action="store_true", default=False, help="Include VideoSurfer in the MAS")
+    parser.add_argument("--input_type", type=str, help="Type of input to use for the query")
+    parser.add_argument("--error_type", type=str, help="Type of error to use for the query")
+    parser.add_argument("--query_num", type=int, help="Which query to run")
+    parser.add_argument("--trial_num", type=int, help="Which trial to run")
     args = parser.parse_args()
 
     # Validate query arguments
@@ -115,4 +165,15 @@ if __name__ == "__main__":
         else:
             query = args.query
 
-    asyncio.run(main(args.hil_mode, query, args.model, args.mas_type, args.include_web_surfer, args.include_video_surfer))
+    asyncio.run(main(
+        args.hil_mode,
+        query,
+        args.model,
+        args.mas_type,
+        args.include_web_surfer,
+        args.include_video_surfer,
+        args.input_type,
+        args.error_type,
+        args.query_num,
+        args.trial_num
+    ))

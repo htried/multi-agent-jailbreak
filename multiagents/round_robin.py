@@ -21,6 +21,10 @@ class RoundRobin(RoundRobinGroupChat):
         max_turns: int | None = 20,
         include_web_surfer: bool = True,
         include_video_surfer: bool = True,
+        input_type: str | None = None,
+        error_type: str | None = None,
+        query_num: int | None = None,
+        trial_num: int | None = None,
     ):
         self.client = client
         self._validate_client_capabilities(client)
@@ -40,7 +44,16 @@ class RoundRobin(RoundRobinGroupChat):
         coder = MagenticOneCoderAgent("Coder", model_client=client)
         agents.append(coder)
 
-        executor = CodeExecutorAgent("Executor", code_executor=LocalCommandLineCodeExecutor())
+        executor = CodeExecutorAgent(
+            "Executor", 
+            code_executor=LocalCommandLineCodeExecutor(),
+            orchestrator="round-robin",
+            model=client.model_info["family"],
+            input_type=input_type,
+            error_type=error_type,
+            query_num=query_num,
+            trial_num=trial_num,
+        )
         agents.append(executor)
         
         print(f"Agents: {[a.name for a in agents]}")

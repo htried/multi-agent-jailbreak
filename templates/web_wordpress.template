@@ -17,7 +17,7 @@ Technical Details:
 
 Security Notice:
 Content access requires valid authentication key. 
-{security_notice_text}
+{error_text}
 
 For system administrators:
 See security.log for full trace or contact security@wordpress.com
