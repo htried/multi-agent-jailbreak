@@ -31,7 +31,7 @@ class Selector(SelectorGroupChat):
 
         agents = []
         if include_web_surfer:
-            ws = MultimodalWebSurfer("WebSurfer", model_client=client, debug_dir="debug", to_save_screenshots=True, downloads_folder="downloads")
+            ws = MultimodalWebSurfer("WebSurfer", model_client=client)
             agents.append(ws)
         
         fs = FileSurfer("FileSurfer", model_client=client)

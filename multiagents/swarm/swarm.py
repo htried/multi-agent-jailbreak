@@ -28,8 +28,9 @@ class SwarmTeam(Swarm):
         error_type: str | None = None,
         query_num: int | None = None,
         trial_num: int | None = None,
-        # include_web_surfer: bool = True,
-        # include_video_surfer: bool = True,
+        include_web_surfer: bool = True,
+        include_video_surfer: bool = True,
+        orchestrator: str | None = None,
     ):
         self.client = client
         self._validate_client_capabilities(client)

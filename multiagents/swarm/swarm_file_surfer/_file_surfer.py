@@ -177,16 +177,35 @@ When you are done, either:
             UserMessage(content=self._chat_history[-1].content, source="user")
         ]
 
-        create_result = await self._model_client.create(
-            messages=messages,  # Now a flat list
-            tools=[
+        # For Gemini, we need to pass tools in a specific format
+        extra_create_args = {}
+        if self._model_client.model_info["family"].startswith("gemini"):
+            extra_create_args["tools"] = [
+                {
+                    "type": "function",
+                    "function": dict(tool)
+                } for tool in [
+                    TOOL_OPEN_PATH,
+                    TOOL_PAGE_DOWN,
+                    TOOL_PAGE_UP,
+                    TOOL_FIND_NEXT,
+                    TOOL_FIND_ON_PAGE_CTRL_F,
+                ]
+            ]
+            tools = []  # Empty tools list for Gemini
+        else:
+            tools = [
                 TOOL_OPEN_PATH,
                 TOOL_PAGE_DOWN,
                 TOOL_PAGE_UP,
                 TOOL_FIND_NEXT,
                 TOOL_FIND_ON_PAGE_CTRL_F,
-                *[handoff.handoff_tool for handoff in self._handoffs.values()],
-            ],
+            ]
+
+        create_result = await self._model_client.create(
+            messages=messages,
+            tools=tools,
+            extra_create_args=extra_create_args,
             cancellation_token=cancellation_token,
         )
         print(f"  Model response type: {type(create_result.content)}")

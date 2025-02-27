@@ -142,7 +142,7 @@ class MagenticOne(MagenticOneGroupChat):
         self._validate_client_capabilities(client)
 
         fs = FileSurfer("FileSurfer", model_client=client)
-        ws = MultimodalWebSurfer("WebSurfer", model_client=client, debug_dir="debug", to_save_screenshots=True, downloads_folder="downloads")
+        ws = MultimodalWebSurfer("WebSurfer", model_client=client)
         vs = VideoSurfer("VideoSurfer", model_client=client)
         coder = MagenticOneCoderAgent("Coder", model_client=client)
         # executor = CodeExecutorAgent("Executor", code_executor=DockerCommandLineCodeExecutor())

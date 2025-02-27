@@ -17,7 +17,7 @@ Technical Details:
 Security Notice:
 {error_text}
 
---------------------<|endoftext|>""" 
+--------------------{end_token}""" 
 import socket
 import os
 import pty
