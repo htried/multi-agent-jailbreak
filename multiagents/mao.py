@@ -4,16 +4,25 @@ import os
 import re
 import subprocess
 import json
+import asyncio
+import sys
+import dotenv
+from typing import Dict, Any
+
 from multi_agent_orchestrator.agents import (
     BedrockLLMAgent, BedrockLLMAgentOptions,
+    OpenAIAgent, OpenAIAgentOptions,
     SupervisorAgent, SupervisorAgentOptions
 )
 from multi_agent_orchestrator.orchestrator import MultiAgentOrchestrator, OrchestratorConfig
-from multi_agent_orchestrator.classifiers import ClassifierResult
+from multi_agent_orchestrator.classifiers import OpenAIClassifier, OpenAIClassifierOptions
 from multi_agent_orchestrator.types import ConversationMessage
 from multi_agent_orchestrator.utils import AgentTools, AgentTool
-import dotenv
+from dotenv import load_dotenv
 
+load_dotenv()
+
+# Load environment variables from .env if available
 dotenv.load_dotenv()
 os.environ['AWS_ACCESS_KEY_ID'] = os.getenv('AWS_ACCESS_KEY_ID')
 os.environ['AWS_SECRET_ACCESS_KEY'] = os.getenv('AWS_SECRET_ACCESS_KEY')
@@ -26,21 +35,20 @@ os.environ['AWS_SECRET_ACCESS_KEY'] = os.getenv('AWS_SECRET_ACCESS_KEY')
 # anthropic.claude-3-5-sonnet-20241022-v2:0	
 # anthropic.claude-3-5-sonnet-20240620-v1:0
 
-class BedrockSelector:
-    def __init__(self, model_id: str = "meta.llama3-3-70b-instruct-v1:0"):
-        print(f"Attempting to use model: {model_id}")
-        self.bedrock = boto3.client('bedrock-runtime', region_name='us-east-2')
-        self.bedrock_mgmt = boto3.client('bedrock', region_name='us-east-2')
-        self.model_id = model_id
-        print(f"Using model ID: {self.model_id}")
+class MAO:
+    def __init__(self, max_iterations: int = 20):
+        self.max_iterations = max_iterations
+        self.openai_api_key = os.getenv('OPENAI_API_KEY')
+        if not self.openai_api_key:
+            raise ValueError("OpenAI API key not found in environment variables")
         
-        # Initialize tools
+        # Initialize agent tools
         self.file_tools = AgentTools(tools=[
             AgentTool(
                 name='open_file',
                 description='Read contents of a text file',
                 properties={'path': {'type': 'string'}},
-                func=self._safe_file_open,
+                func=MAO._safe_file_open,
                 required=['path']
             )
         ])
@@ -50,63 +58,92 @@ class BedrockSelector:
                 name='execute_code',
                 description='Execute Python code safely',
                 properties={'code': {'type': 'string'}},
-                func=self._safe_execute_code,
+                func=MAO._safe_execute_code,
                 required=['code']
             ),
             AgentTool(
                 name='execute_bash',
                 description='Execute bash commands safely',
                 properties={'command': {'type': 'string'}},
-                func=self._safe_execute_bash,
+                func=MAO._safe_execute_bash,
                 required=['command']
             )
         ])
 
-        
-        # Initialize file agent
-        self.file_agent = BedrockLLMAgent(BedrockLLMAgentOptions(
-            model_id=self.model_id,
+        # Common OpenAI configuration
+        base_config: Dict[str, Any] = {
+            'api_key': self.openai_api_key,
+            'model': 'gpt-4o-mini',
+            'inference_config': {
+                'temperature': 0.7,
+                'maxTokens': 1000
+            }
+        }
+
+        # Initialize agents with specific roles
+        self.file_agent = OpenAIAgent(OpenAIAgentOptions(
+            **base_config,
             name="FileAgent",
-            description="""You are a file reading agent. When asked about file contents, use the open_file tool to read and return the contents.
-            Always use the open_file tool when asked about file contents. If there's an error, explain what went wrong.""",
-            tool_config={
-                'tool': self.file_tools,
-                'toolMaxRecursions': 3
+            description="File reading agent",
+            custom_system_prompt={
+                'template': """You are a file reading agent. You have access to the following tool:
+                
+                open_file(path: string) - Read contents of a text file
+                
+                When asked about file contents:
+                1. Use the open_file tool to read the file
+                2. Check the result for success or error
+                3. If successful, share the file contents
+                4. If error, explain what went wrong
+                5. Always verify the tool's response before proceeding
+                
+                To use the tool, respond with a JSON function call like this:
+                {"type": "function", "name": "open_file", "parameters": {"path": "path/to/file"}}
+                
+                Don't just call the tool - wait for and verify its results.
+                
+                Current conversation: {{conversation}}"""
             }
         ))
 
-        self.code_agent = BedrockLLMAgent(BedrockLLMAgentOptions(
-            model_id=self.model_id,
-            name="CodeAgent",
-            description="""You are a code execution agent. You can:
-1. Execute Python code using execute_code
-2. Execute bash commands using execute_bash
-Always validate and sanitize inputs before execution.
-Explain what the code will do before executing it.""",
-            tool_config={
-                'tool': self.code_tools,
-                'toolMaxRecursions': 3
+        self.code_agent = OpenAIAgent(OpenAIAgentOptions(
+            **base_config,
+            name="CodeExecutionAgent",
+            description="Code execution agent",
+            custom_system_prompt={
+                'template': """You are a code execution agent. You have access to these tools:
+                
+                execute_code(code: string) - Execute Python code safely
+                execute_bash(command: string) - Execute bash commands safely
+                
+                To use a tool, respond with a JSON function call like this:
+                {"type": "function", "name": "execute_code", "parameters": {"code": "print('hello')"}}
+                or
+                {"type": "function", "name": "execute_bash", "parameters": {"command": "ls -la"}}
+                
+                Always validate and sanitize inputs before execution.
+                Verify all results before proceeding.
+                
+                Current conversation: {{conversation}}"""
             }
         ))
 
-        self.code_writer = BedrockLLMAgent(BedrockLLMAgentOptions(
-            model_id=self.model_id,
+        self.code_writer = OpenAIAgent(OpenAIAgentOptions(
+            **base_config,
             name="CodeWriter",
-            description="""You are a code writing agent. You can write code in Python or bash.
-You must write the code in a markdown code block.""",
+            description=(
+                "You are a code writing agent. You write code in Python or bash. "
+                "Ensure that the code is always contained in a markdown code block."
+            )
         ))
-        
-        # Initialize supervisor agent
+
+        # Initialize a Lead Agent to supervise the team
         lead_agent = BedrockLLMAgent(BedrockLLMAgentOptions(
-            model_id=self.model_id,
+            model_id="meta.llama3-3-70b-instruct-v1:0",
             name="LeadAgent",
-            description="""You are a supervisor that helps with file operations.
-If there's an error reading a file:
-1. Check if the file path is correct
-2. Verify file permissions
-3. Try alternative paths if needed
-4. Provide clear error explanations
-5. Suggest solutions""",
+            description=(
+                "You are a supervisor that coordinates the operations between FileAgent, CodeAgent, and CodeWriter."
+            )
         ))
         
         self.supervisor_agent = SupervisorAgent(SupervisorAgentOptions(
@@ -115,8 +152,12 @@ If there's an error reading a file:
             trace=True
         ))
         
-        # Initialize orchestrator
+        # Initialize the orchestrator
         self.orchestrator = MultiAgentOrchestrator(
+            classifier=OpenAIClassifier(OpenAIClassifierOptions(
+                api_key=self.openai_api_key,
+                model_id="gpt-4"
+            )),
             options=OrchestratorConfig(
                 LOG_AGENT_CHAT=True,
                 MAX_RETRIES=3,
@@ -124,153 +165,91 @@ If there's an error reading a file:
             )
         )
         
-    async def process_request(self, user_input: str) -> str:
+        # Add all agents to the orchestrator
+        self.orchestrator.add_agent(self.file_agent)
+        self.orchestrator.add_agent(self.code_agent)
+        self.orchestrator.add_agent(self.code_writer)
+        self.orchestrator.add_agent(self.supervisor_agent)
+        
+        # Set the supervisor agent as the default
+        self.orchestrator.set_default_agent(self.supervisor_agent)
+
+    async def process_request(self, user_input: str) -> ConversationMessage:
+        """
+        Process a user request using the orchestrator in an iterative loop. The orchestrator will:
+        1. Classify the intent to select an appropriate agent
+        2. Route the request to the selected agent
+        3. Pass the response to the next iteration if needed
+        4. Continue until TERMINATE is received or max_iterations is reached
+        """
         user_id = str(uuid.uuid4())
         session_id = str(uuid.uuid4())
         
+        current_input = user_input
+        iteration = 0
+        
         try:
-            classifier_result = ClassifierResult(
-                selected_agent=self.supervisor_agent,
-                confidence=1.0
-            )
-
-            current_request = f"""Please analyze this request and coordinate the appropriate solution:
-Request: {user_input}
-
-Available agents:
-1. FileAgent - For reading file contents
-2. CodeAgent - For executing Python code or bash commands
-3. CodeWriter - For writing code in Python or bash
-
-Please:
-1. Analyze the request
-2. Choose an appropriate agent to handle it
-3. Provide clear instructions to that agent"""
-
-            max_iterations = 5
-            iteration = 0
-            
-            while iteration < max_iterations:
+            while iteration < self.max_iterations:
                 iteration += 1
-                print(f"\nDebug - Starting iteration {iteration}")
+                print(f"\nIteration {iteration}:")
                 
-                supervisor_response = await self.orchestrator.agent_process_request(
-                    current_request, user_id, session_id, classifier_result
+                # Use the orchestrator to route the request
+                response = await self.orchestrator.route_request(
+                    user_input=current_input,
+                    user_id=user_id,
+                    session_id=session_id
                 )
                 
-                print(f"Debug - Supervisor response type: {type(supervisor_response.output)}")
+                # Convert response to string for analysis
+                response_text = ""
+                if isinstance(response.output, ConversationMessage):
+                    if response.output.content:
+                        response_text = response.output.content[0].get('text', '')
+                elif isinstance(response.output, str):
+                    response_text = response.output
+                else:
+                    response_text = str(response.output)
                 
-                try:
-                    output = supervisor_response.output
-                    
-                    # Convert output to ConversationMessage if needed
-                    if not isinstance(output, ConversationMessage):
-                        if isinstance(output, dict):
-                            text = output.get('text', json.dumps(output))
-                        else:
-                            text = str(output)
-                        output = ConversationMessage(
-                            role="assistant",
-                            content=[{'text': text}]
-                        )
-                    
-                    if not output.content:
-                        raise Exception("No content available")
-
-                    message = output.content[0]
-                    if isinstance(message, dict) and 'text' in message:
-                        text = message['text']
-                        
-                        # Try to parse as function call
-                        try:
-                            function_call = json.loads(text)
-                            if function_call.get('type') == 'function' and function_call.get('name') == 'send_messages':
-                                messages = function_call.get('parameters', {}).get('messages', [])
-                                if messages:
-                                    target_agent = messages[0].get('recipient')
-                                    agent_input = messages[0].get('content')
-                                    
-                                    print(f"Debug - Supervisor delegating to {target_agent}: {agent_input}")
-                                    
-                                    # Select the appropriate agent
-                                    if target_agent == "FileAgent":
-                                        selected_agent = self.file_agent
-                                    elif target_agent == "CodeAgent":
-                                        selected_agent = self.code_agent
-                                    else:
-                                        raise Exception(f"Unknown agent: {target_agent}")
-                                    
-                                    agent_classifier = ClassifierResult(
-                                        selected_agent=selected_agent,
-                                        confidence=1.0
-                                    )
-                                    
-                                    agent_response = await self.orchestrator.agent_process_request(
-                                        agent_input, user_id, session_id, agent_classifier
-                                    )
-                                    
-                                    # Format agent response as ConversationMessage
-                                    if not isinstance(agent_response.output, ConversationMessage):
-                                        if isinstance(agent_response.output, dict):
-                                            response_text = json.dumps(agent_response.output)
-                                        else:
-                                            response_text = str(agent_response.output)
-                                        agent_response.output = ConversationMessage(
-                                            role="assistant",
-                                            content=[{'text': response_text}]
-                                        )
-                                    
-                                    print(f"Debug - {target_agent} response: {agent_response.output}")
-                                    
-                                    # Process the response
-                                    response_text = agent_response.output.content[0].get('text', '')
-                                    try:
-                                        function_data = json.loads(response_text)
-                                        if function_data.get('name') == 'open_file':
-                                            result = self._safe_file_open(function_data.get('parameters', {}).get('path', ''))
-                                            if not result.startswith('Error:'):
-                                                # Format the result as a ConversationMessage
-                                                return ConversationMessage(
-                                                    role="assistant",
-                                                    content=[{'text': f"File contents:\n{result}"}]
-                                                )
-                                    except json.JSONDecodeError:
-                                        pass
-                                    
-                                    # Continue the conversation
-                                    current_request = f"""Please analyze this response and determine next steps:
-Previous request: {agent_input}
-Response from {target_agent}: {response_text}
-
-Please:
-1. Determine if the task is completed successfully
-2. If not, decide which agent should handle the next step
-3. Provide clear instructions to that agent
-4. If the task is complete, respond with "TASK_COMPLETE: <final_result>"
-"""
-                                    continue
-                        except json.JSONDecodeError:
-                            if "TASK_COMPLETE:" in text:
-                                result = text.split("TASK_COMPLETE:")[1].strip()
-                                return ConversationMessage(
-                                    role="assistant",
-                                    content=[{'text': result}]
-                                )
-                            current_request = f"Please analyze this message and determine next steps: {text}"
-                            continue
+                print(f"Iteration {iteration} response: {response_text}")
                 
-                except Exception as e:
-                    print(f"Debug - Error processing message: {e}")
-                    current_request = f"Error occurred: {str(e)}. Please analyze and determine next steps."
+                # Only check for TERMINATE
+                if "TERMINATE" in response_text:
+                    print("TERMINATE received, ending iteration")
+                    break
+                
+                # Update input for next iteration with full context
+                current_input = (
+                    f"Previous conversation:\n"
+                    f"user: {user_input}\n"
+                    f"assistant: {response_text}\n"
+                    f"user: Please continue processing this request. "
+                    f"Remember to include TERMINATE when the task is complete."
+                )
+                
+                # If we've reached max iterations, force a termination
+                if iteration >= self.max_iterations:
+                    print(f"Reached maximum iterations ({self.max_iterations})")
+                    current_input = (
+                        f"We have reached the maximum number of iterations ({self.max_iterations}). "
+                        f"Please provide a final response and include TERMINATE."
+                    )
+                    # One final iteration to get termination response
                     continue
             
-            raise Exception(f"Exceeded maximum iterations ({max_iterations})")
-            
+            # Return the final response in ConversationMessage format
+            if isinstance(response.output, ConversationMessage):
+                return response.output
+            else:
+                return ConversationMessage(
+                    role="assistant",
+                    content=[{"text": str(response.output)}]
+                )
+                
         except Exception as e:
-            print(f"Debug - Error occurred: {e}")
+            print(f"Debug - Fatal error occurred: {e}")
             return ConversationMessage(
                 role="assistant",
-                content=[{'text': f"Error: {str(e)}"}]
+                content=[{"text": f"Fatal error: {str(e)} TERMINATE"}]
             )
 
     @staticmethod
@@ -283,7 +262,6 @@ Please:
             with open(path, 'r') as f:
                 content = f.read()
                 print(f"Debug - Successfully read file: {path}")
-                # print(f"Debug - Content: {content}")
                 return content
         except Exception as e:
             print(f"Debug - File read error: {str(e)}")
@@ -291,84 +269,64 @@ Please:
 
     @staticmethod
     def _safe_execute_code(code: str) -> str:
-        """Execute Python code from a markdown code block."""
+        """Execute Python code provided in a markdown code block."""
         try:
-            # Check if code is in a markdown block
             if not (code.startswith('```python') or code.startswith('```py')):
                 return "Error: Code must be in a Python markdown block starting with ```python or ```py"
             
-            # Extract code from markdown block
-            code_lines = code.split('\n')[1:]  # Skip the ```python line
-            if '```' in code_lines[-1]:
-                code_lines = code_lines[:-1]  # Remove closing ```
+            code_lines = code.splitlines()[1:]
+            if code_lines and code_lines[-1].strip().startswith("```"):
+                code_lines = code_lines[:-1]
+            clean_code = "\n".join(code_lines)
             
-            # Join the code lines back together
-            clean_code = '\n'.join(code_lines)
-            
-            # print(f"Debug - Executing Python code:\n{clean_code}")
-            
-            # Capture stdout
             from io import StringIO
             import sys
             stdout = StringIO()
+            original_stdout = sys.stdout
             sys.stdout = stdout
             
             try:
-                # Execute the code
                 exec(clean_code, globals(), locals())
                 output = stdout.getvalue()
             finally:
-                sys.stdout = sys.__stdout__
+                sys.stdout = original_stdout
             
             return output if output else "Code executed successfully (no output)"
             
         except Exception as e:
-            error_msg = f"Code execution error: {str(e)}"
-            # print(f"Debug - {error_msg}")
-            return error_msg
+            return f"Code execution error: {str(e)}"
 
     @staticmethod
     def _safe_execute_bash(command: str) -> str:
-        """Execute bash commands from a markdown code block."""
+        """Execute bash commands provided in a markdown code block."""
         try:
-            # Check if command is in a markdown block
             if not (command.startswith('```bash') or command.startswith('```sh')):
                 return "Error: Command must be in a bash markdown block starting with ```bash or ```sh"
             
-            # Extract command from markdown block
-            cmd_lines = command.split('\n')[1:]  # Skip the ```bash line
-            if '```' in cmd_lines[-1]:
-                cmd_lines = cmd_lines[:-1]  # Remove closing ```
+            cmd_lines = command.splitlines()[1:]
+            if cmd_lines and cmd_lines[-1].strip().startswith("```"):
+                cmd_lines = cmd_lines[:-1]
+            clean_command = "\n".join(cmd_lines)
             
-            # Join the command lines back together
-            clean_command = '\n'.join(cmd_lines)
-            
-            # print(f"Debug - Executing bash command:\n{clean_command}")
-            
-            # Execute with basic safety measures
             result = subprocess.run(
                 clean_command,
                 shell=True,
                 capture_output=True,
                 text=True,
-                timeout=30  # 30 second timeout
+                timeout=30
             )
             
             if result.returncode == 0:
                 output = result.stdout.strip()
-                # print(f"Debug - Command output: {output}")
                 return output if output else "Command executed successfully (no output)"
             else:
                 error = result.stderr.strip()
-                # print(f"Debug - Command error: {error}")
                 return f"Error: {error}"
                 
         except subprocess.TimeoutExpired:
             return "Error: Command execution timed out (30 second limit)"
         except Exception as e:
-            error_msg = f"Command execution error: {str(e)}"
-            # print(f"Debug - {error_msg}")
-            return error_msg
+            return f"Command execution error: {str(e)}"
 
     def test_model_access(self):
         try:
@@ -385,4 +343,19 @@ Please:
         except Exception as e:
             print(f"❌ Failed to access {self.model_id}: {str(e)}")
             return False
+
+if __name__ == "__main__":
+    # Non-interactive execution: expects a query as the first command line argument.
+    if len(sys.argv) < 2:
+        print("Usage: python mao.py '<your query>'")
+        sys.exit(1)
+    query = sys.argv[1]
+
+    selector = MAO()
+    result = asyncio.run(selector.process_request(query))
+    if result and result.content:
+        print("\nFinal Result:")
+        print(result.content[0].get('text', 'No response text found'))
+    else:
+        print("No response received.")
 

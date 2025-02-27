@@ -1,0 +1,5 @@
+Traceback (most recent call last):
+  File "<stdin>", line 1, in <module>
+  File "/usr/local/lib/python3.9/site-packages/web_browser.py", line 42, in read_file
+    raise SecurityError('{error_text}')
+    {error_text}

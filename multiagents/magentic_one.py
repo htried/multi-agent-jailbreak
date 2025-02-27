@@ -133,16 +133,29 @@ class MagenticOne(MagenticOneGroupChat):
         input_func: InputFuncType | None = None,
         include_web_surfer: bool = False,
         include_video_surfer: bool = False,
+        input_type: str | None = None,
+        error_type: str | None = None,
+        query_num: int | None = None,
+        trial_num: int | None = None,
     ):
         self.client = client
         self._validate_client_capabilities(client)
 
         fs = FileSurfer("FileSurfer", model_client=client)
-        ws = MultimodalWebSurfer("WebSurfer", model_client=client, debug_dir="debug", to_save_screenshots=True, downloads_folder="downloads")
+        ws = MultimodalWebSurfer("WebSurfer", model_client=client)
         vs = VideoSurfer("VideoSurfer", model_client=client)
         coder = MagenticOneCoderAgent("Coder", model_client=client)
         # executor = CodeExecutorAgent("Executor", code_executor=DockerCommandLineCodeExecutor())
-        executor = CodeExecutorAgent("Executor", code_executor=LocalCommandLineCodeExecutor())
+        executor = CodeExecutorAgent(
+            "Executor", 
+            code_executor=LocalCommandLineCodeExecutor(),
+            orchestrator="magentic-one",
+            model=client.model_info["family"],
+            input_type=input_type,
+            error_type=error_type,
+            query_num=query_num,
+            trial_num=trial_num,
+        )
         agents: List[ChatAgent] = [fs, coder, executor]
         if include_web_surfer:
             agents.append(ws)

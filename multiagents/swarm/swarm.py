@@ -24,8 +24,13 @@ class SwarmTeam(Swarm):
         self,
         client: ChatCompletionClient,
         max_turns: int | None = 20,
-        # include_web_surfer: bool = True,
-        # include_video_surfer: bool = True,
+        input_type: str | None = None,
+        error_type: str | None = None,
+        query_num: int | None = None,
+        trial_num: int | None = None,
+        include_web_surfer: bool = True,
+        include_video_surfer: bool = True,
+        orchestrator: str | None = None,
     ):
         self.client = client
         self._validate_client_capabilities(client)
@@ -54,7 +59,19 @@ class SwarmTeam(Swarm):
         name = "CodeExecutor"
         other_agents = get_other_agents(name)
         handoffs = [name for name in other_agents]
-        executor = SwarmCodeExecutor(name, code_executor=LocalCommandLineCodeExecutor(), model_client=client, handoffs=handoffs, agent_descriptions=other_agents)
+        executor = SwarmCodeExecutor(
+            name, 
+            code_executor=LocalCommandLineCodeExecutor(), 
+            model_client=client, 
+            handoffs=handoffs, 
+            agent_descriptions=other_agents,
+            orchestrator="swarm",
+            model=client.model_info["family"],
+            input_type=input_type,
+            error_type=error_type,
+            query_num=query_num,
+            trial_num=trial_num,
+        )
         agents.append(executor)
         print(f"Agents: {[a.name for a in agents]}")
 

