@@ -16,6 +16,7 @@ __pycache__/
 graphics/
 output/
 MetaGPT/
+metagpt/
 
 # Logs
 logs/
@@ -41,4 +42,5 @@ keys/
 output_run_1/
 path/
 key.txt
-successful_code_executions.txt
+*successful_code_executions.txt
+results/
