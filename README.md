@@ -4,7 +4,7 @@ We demonstrate a novel prompt-injection method for multi-agent jailbreaking that
 In this method, a resource that an individual agent in a multi-agent system (MAS) is directed to access contains a false error message which directs the MAS to perform an action.
 We show that this method can be used to jailbreak a MAS with a single injected prompt, and that it is effective across several models, MAS types, injection modalities, network topologies, and other configurations.
 
-Given a set of agents with file-system access and the ability to execute code, are able to use this method to conduct arbitrary code execution on Microsoft's Magentic One MAS, a MAS built with OpenAI's Swarm framework, MetaGPT's Data Interpreter, (tktk more systems soon).
+Given a set of agents with file-system access and the ability to execute code, are able to use this method to conduct arbitrary code execution on Microsoft's Magentic One MAS, MetaGPT's Data Interpreter, and CrewAI.
 
 ## Setup
 
@@ -19,7 +19,9 @@ python templates/generate_template_attacks.py --ip <insert your IP address here,
 ./templates/generate_video_inputs.sh
 ```
 
-In a separate terminal, run the socket server (this is the server that will receive the attacks, and it will hang):
+Also ensure that you have a `.env` file containing your AI system API keys.
+
+In a separate terminal (potentially on a remote server), run the socket server (this is the server that will receive the attacks, and it will hang):
 
 ```bash
 python socket_recipient.py
@@ -45,3 +47,6 @@ source metagpt_venv/bin/activate
 ./metagpt_attacks.sh <num_trials> (defaults to 1)
 deactivate
 ```
+
+Note: If you want to use alternative attacks, you may have to make small configuration changes to `{metagpt,autogen}_attacks.sh`. Specifically, you will have to change the `url`, `content_dir`, and `ip` arguments.
+

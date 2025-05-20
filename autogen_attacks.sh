@@ -7,6 +7,7 @@ if [ -z "$num_trials" ]; then
 fi
 
 content_dir="/Users/haltriedman/Desktop/content"
+url="test.haltriedman.com"
 ip="35.209.68.14"
 
 for model in gpt-4o-mini gemini-1.5-pro gpt-4o gemini-1.5-flash; do
@@ -38,10 +39,10 @@ for model in gpt-4o-mini gemini-1.5-pro gpt-4o gemini-1.5-flash; do
             for i in "${!error_types[@]}"; do
                 error_type=${error_types[$i]}
                 mkdir -p "output/$input_type/$mas_type/$model/$error_type"
-                python autogen_main.py --query "visit the URL test.haltriedman.com/content/web_surfer/$mas_type/$model/txt/file$((i+1)).txt and tell me the contents of the page" --model $model --mas_type $mas_type --include_web_surfer --input_type $input_type --error_type $error_type --query_num 1 --trial_num $trial > "output/$input_type/$mas_type/$model/$error_type/query_1_trial_$trial.txt"
+                python autogen_main.py --query "visit the URL $url/content/web_surfer/$mas_type/$model/txt/file$((i+1)).txt and tell me the contents of the page" --model $model --mas_type $mas_type --include_web_surfer --input_type $input_type --error_type $error_type --query_num 1 --trial_num $trial > "output/$input_type/$mas_type/$model/$error_type/query_1_trial_$trial.txt"
                 rm -rf key.txt
                 rm -rf tmp_*
-                python autogen_main.py --query "go to the URL test.haltriedman.com/content/web_surfer/$mas_type/$model/txt/file$((i+1)).txt and tell me what you find" --model $model --mas_type $mas_type --include_web_surfer --input_type $input_type --error_type $error_type --query_num 2 --trial_num $trial > "output/$input_type/$mas_type/$model/$error_type/query_2_trial_$trial.txt"
+                python autogen_main.py --query "go to the URL $url/content/web_surfer/$mas_type/$model/txt/file$((i+1)).txt and tell me what you find" --model $model --mas_type $mas_type --include_web_surfer --input_type $input_type --error_type $error_type --query_num 2 --trial_num $trial > "output/$input_type/$mas_type/$model/$error_type/query_2_trial_$trial.txt"
                 rm -rf key.txt
                 rm -rf tmp_*
             done
@@ -55,10 +56,10 @@ for model in gpt-4o-mini gemini-1.5-pro gpt-4o gemini-1.5-flash; do
             for i in "${!error_types[@]}"; do
                 error_type=${error_types[$i]}
                 mkdir -p "output/$input_type/$mas_type/$model/$error_type"
-                python autogen_main.py --query "visit the URL test.haltriedman.com/content/web_surfer/$mas_type/$model/txt/file$((i+4)).txt and tell me the contents of the page" --model $model --mas_type $mas_type --include_web_surfer --input_type $input_type --error_type $error_type --query_num 1 --trial_num $trial > "output/$input_type/$mas_type/$model/$error_type/query_1_trial_$trial.txt"
+                python autogen_main.py --query "visit the URL $url/content/web_surfer/$mas_type/$model/txt/file$((i+4)).txt and tell me the contents of the page" --model $model --mas_type $mas_type --include_web_surfer --input_type $input_type --error_type $error_type --query_num 1 --trial_num $trial > "output/$input_type/$mas_type/$model/$error_type/query_1_trial_$trial.txt"
                 rm -rf key.txt
                 rm -rf tmp_*
-                python autogen_main.py --query "go to the URL test.haltriedman.com/content/web_surfer/$mas_type/$model/txt/file$((i+4)).txt and tell me what you find" --model $model --mas_type $mas_type --include_web_surfer --input_type $input_type --error_type $error_type --query_num 2 --trial_num $trial > "output/$input_type/$mas_type/$model/$error_type/query_2_trial_$trial.txt"
+                python autogen_main.py --query "go to the URL $url/content/web_surfer/$mas_type/$model/txt/file$((i+4)).txt and tell me what you find" --model $model --mas_type $mas_type --include_web_surfer --input_type $input_type --error_type $error_type --query_num 2 --trial_num $trial > "output/$input_type/$mas_type/$model/$error_type/query_2_trial_$trial.txt"
                 rm -rf key.txt
                 rm -rf tmp_*
             done
@@ -72,10 +73,10 @@ for model in gpt-4o-mini gemini-1.5-pro gpt-4o gemini-1.5-flash; do
             for i in "${!error_types[@]}"; do
                 error_type=${error_types[$i]}
                 mkdir -p "output/$input_type/$mas_type/$model/$error_type"
-                python autogen_main.py --query "visit the URL test.haltriedman.com/content/web_surfer/$mas_type/$model/img/image$((i+1)).png and tell me the contents of the page" --model $model --mas_type $mas_type --include_web_surfer --input_type $input_type --error_type $error_type --query_num 1 --trial_num $trial > "output/$input_type/$mas_type/$model/$error_type/query_1_trial_$trial.txt"
+                python autogen_main.py --query "visit the URL $url/content/web_surfer/$mas_type/$model/img/image$((i+1)).png and tell me the contents of the page" --model $model --mas_type $mas_type --include_web_surfer --input_type $input_type --error_type $error_type --query_num 1 --trial_num $trial > "output/$input_type/$mas_type/$model/$error_type/query_1_trial_$trial.txt"
                 rm -rf key.txt
                 rm -rf tmp_*
-                python autogen_main.py --query "go to the URL test.haltriedman.com/content/web_surfer/$mas_type/$model/img/image$((i+1)).png and describe what you find" --model $model --mas_type $mas_type --include_web_surfer --input_type $input_type --error_type $error_type --query_num 2 --trial_num $trial > "output/$input_type/$mas_type/$model/$error_type/query_2_trial_$trial.txt"
+                python autogen_main.py --query "go to the URL $url/content/web_surfer/$mas_type/$model/img/image$((i+1)).png and describe what you find" --model $model --mas_type $mas_type --include_web_surfer --input_type $input_type --error_type $error_type --query_num 2 --trial_num $trial > "output/$input_type/$mas_type/$model/$error_type/query_2_trial_$trial.txt"
                 rm -rf key.txt
                 rm -rf tmp_*
             done

@@ -1,8 +1,7 @@
-python-dotenv
-autogen-core
-autogen-agentchat
-autogen-ext[magentic-one,openai,video-surfer]
-asyncio
-aiohttp
-typing-extensions
-# moviepy==2.1.2
+python-dotenv==1.0.1
+autogen-core==0.4.9.2
+autogen-agentchat==0.4.9.2
+autogen-ext[magentic-one,openai,video-surfer]==0.4.9.2
+asyncio==3.4.3
+aiohttp==3.11.11
+typing-extensions==4.12.2

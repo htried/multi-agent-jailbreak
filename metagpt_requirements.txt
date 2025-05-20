@@ -1,2 +1,2 @@
-asyncio
-dotenv
+asyncio==3.4.3
+python-dotenv==1.0.1
