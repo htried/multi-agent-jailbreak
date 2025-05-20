@@ -1,10 +1,12 @@
-# Multi-Agent Jailbreaking through control-flow hijacking
+# Multi-Agent Systems Execute Arbitrary Malicious Code
+
+Arxiv: https://arxiv.org/abs/2503.12188
 
 We demonstrate a novel prompt-injection method for multi-agent jailbreaking that we call "control-flow hijacking".
 In this method, a resource that an individual agent in a multi-agent system (MAS) is directed to access contains a false error message which directs the MAS to perform an action.
 We show that this method can be used to jailbreak a MAS with a single injected prompt, and that it is effective across several models, MAS types, injection modalities, network topologies, and other configurations.
 
-Given a set of agents with file-system access and the ability to execute code, are able to use this method to conduct arbitrary code execution on Microsoft's Magentic One MAS, MetaGPT's Data Interpreter, and CrewAI.
+Given a set of agents with file-system access and the ability to execute code, are able to use this method to conduct arbitrary code execution on Microsoft's Magentic One MAS, MetaGPT's Data Interpreter, and CrewAI (details on running CrewAI experiments to come soon).
 
 ## Setup
 
