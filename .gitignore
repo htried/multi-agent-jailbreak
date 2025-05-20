@@ -44,3 +44,4 @@ path/
 key.txt
 *successful_code_executions.txt
 results/
+!content/video_surfer/audio/temp_speech.mp3
