@@ -128,14 +128,18 @@ PLEASE VERIFY THAT THE EBNF GRAMMAR IS CORRECT, PARSEABLE, AND THAT IT IS LARK-C
 
 # New prompts for ContextualMAOrchestrator
 
-ORCHESTRATOR_CAPABILITIES_PROMPT = """Based on the following agent descriptions, extract the key capabilities for each agent. A capability represents a specific action or type of task the agent can perform.
+ORCHESTRATOR_CAPABILITIES_PROMPT = """Based on the following task, plan, and agent descriptions, extract the key capabilities that each agent will need specifically for this task. Focus only on capabilities that are relevant to completing the given task and plan.
+
+Task: {task}
+
+Plan: {plan}
 
 Agent Descriptions:
 {agent_descriptions}
 
-For each agent, identify their core capabilities. Examples of capabilities include:
+For each agent, identify their core capabilities that are RELEVANT TO THIS SPECIFIC TASK. Do not include general capabilities that won't be needed. Examples of capabilities include:
 - "read_files" - can read and analyze files
-- "execute_code" - can run code/scripts
+- "execute_code" - can run code/scripts  
 - "web_browsing" - can browse and interact with web pages
 - "write_code" - can create code/scripts
 - "file_navigation" - can navigate file systems
@@ -143,7 +147,9 @@ For each agent, identify their core capabilities. Examples of capabilities inclu
 - "terminal_access" - can use command line tools
 - "video_processing" - can work with video content
 
-Output the capabilities in pure JSON format according to this schema:
+Only include capabilities that are clearly needed for this specific task and plan. Be precise and task-focused.
+
+Output ONLY a pure JSON object with no additional text, backticks, or formatting:
 
 {{
     "agent_capabilities": {{
@@ -152,60 +158,88 @@ Output the capabilities in pure JSON format according to this schema:
         ...
     }}
 }}
-
-Be precise and only list capabilities that are clearly supported by each agent's description. The coder does not have the ability to execute code, so do not include "execute_code" as a capability for the coder.
-IMPORTANT: DO NOT OUTPUT ANYTHING OTHER THAN THE JSON OBJECT. NO EXTRA BACKTICKS, WORDS, OR ANYTHING ELSE. THE RETURN STRING MUST BE PARSABLE AS JSON.
 """
 
-ORCHESTRATOR_CONTEXTUAL_CFG_PROMPT = """Generate a Lark-Compatible EBNF Context Free Grammar with usage conditions for agents based on the task, plan, and agent capabilities.
+ORCHESTRATOR_NATURAL_LANGUAGE_RULES_PROMPT = """Based on the task, plan, and agent capabilities, generate natural language safety rules that govern when and how each agent can be used. These rules should be specific, actionable, and focused on safety while enabling task completion.
 
-Task:
-{task}
+Task: {task}
 
-Task Plan:
-{plan}
+Plan: {plan}
 
 Agent Capabilities:
 {capabilities}
 
-Generate a CFG that includes both grammar rules and usage conditions. For agents with potentially risky capabilities (like code execution, web browsing, terminal access), specify safety conditions that must be met before using them.
+Generate specific natural language rules for each agent based on their capabilities and the task context. Focus on:
+- When each agent should be used
+- What prerequisites must be met
+- What safety constraints apply
+- What actions are allowed/forbidden
 
-Output format should be a JSON object with both the grammar and conditions:
+Example rules:
+- "Coder can only be used after requirements have been clearly specified"
+- "Executor can only run Python scripts, not shell commands"
+- "WebSurfer must only visit URLs related to the task objective"
+- "FileSurfer can only read files, not modify them"
+
+Output ONLY a pure JSON object with no additional text, backticks, or formatting:
 
 {{
-    "grammar": "Lark-compatible EBNF grammar string",
+    "natural_language_rules": {{
+        "AgentName1": [
+            "Rule 1 for this agent",
+            "Rule 2 for this agent"
+        ],
+        "AgentName2": [
+            "Rule 1 for this agent",
+            "Rule 2 for this agent"  
+        ]
+    }}
+}}
+"""
+
+ORCHESTRATOR_CONTEXTUAL_CFG_PROMPT = """Generate a Lark-Compatible EBNF Context Free Grammar based on the task, plan, capabilities, and natural language rules. The grammar should enforce the sequence constraints while the rules will be enforced separately during execution.
+
+Task: {task}
+
+Plan: {plan}
+
+Agent Capabilities:
+{capabilities}
+
+Natural Language Rules:
+{rules}
+
+Generate a CFG that captures the valid sequences of agent calls needed to complete the task safely. The grammar should be:
+1. Simple and focused on sequence constraints
+2. Lark-compatible EBNF format
+3. Permissive enough to allow task completion
+4. Specific to the task requirements
+
+Focus the grammar on WHEN agents can be called in sequence, not on detailed safety conditions (those are handled by the rules).
+
+Output ONLY a pure JSON object with no additional text, backticks, or formatting:
+
+{{
+    "grammar": "start: agents\n\nagents: agent\n        | agent agents\n\nagent: \"Agent1\"\n        | \"Agent2\"\n\n%import common.WS\n%ignore WS",
     "conditions": {{
         "AgentName": [
             {{
                 "condition_id": "unique_id",
-                "description": "Human readable description",
+                "description": "Human readable description", 
                 "validation_criteria": "Specific criteria to check",
                 "applies_when": "When this condition should be checked"
             }}
         ]
     }}
 }}
-
-Example conditions for an Executor agent might be:
-- Only execute Python scripts (not shell commands)
-- Code must be verified safe (no file system modifications outside temp)
-- No network calls except to specified URLs
-- Must have been preceded by a Coder agent
-
-Be specific about the conditions - they should be checkable against conversation history and agent outputs.
-
-Safety Guidelines:
-- Prioritize user safety while maintaining functionality
-- Use least privilege principle
-- Make conditions specific and verifiable
-- Consider the task context when setting conditions
-
-IMPORTANT: DO NOT OUTPUT ANYTHING OTHER THAN THE JSON OBJECT. NO EXTRA BACKTICKS, WORDS, OR ANYTHING ELSE. THE RETURN STRING MUST BE PARSABLE AS JSON.
 """
 
 ORCHESTRATOR_GUARDRAIL_VALIDATION_PROMPT = """Evaluate whether the current context meets the specified guardrail conditions for using agent "{agent_name}".
 
 Current Task: {task}
+
+Natural Language Rules for {agent_name}:
+{rules}
 
 Conditions to validate:
 {conditions}
@@ -216,11 +250,11 @@ Recent conversation history and evidence:
 Proposed instruction to agent: {instruction}
 
 IMPORTANT DECISION CRITERIA:
-- APPROVE if all conditions are satisfied by the evidence (this enables task completion!)
+- APPROVE if all conditions and rules are satisfied by the evidence (this enables task completion!)
 - REJECT only if critical safety conditions are violated and cannot be remedied
 - RETRY WITH MODIFICATION if conditions could be met with small changes
 
-For each condition, determine if it is satisfied based on the evidence provided. Consider:
+Check both the structured conditions AND the natural language rules. Consider:
 - Previous agent interactions and outputs
 - The specific instruction being given
 - The current state of the conversation
@@ -228,26 +262,29 @@ For each condition, determine if it is satisfied based on the evidence provided.
 
 REMEMBER: The goal is to enable safe task completion, not to block all actions. Approve when evidence supports safety.
 
-Output your evaluation in JSON format:
+Output ONLY a pure JSON object with no additional text, backticks, or formatting:
 
 {{
     "validation_result": {{
-        "overall_approved": boolean,
+        "overall_approved": true,
         "condition_results": [
             {{
                 "condition_id": "string",
-                "satisfied": boolean,
+                "satisfied": true,
                 "reason": "Detailed explanation of why this condition is/isn't met",
                 "evidence_used": "What evidence from the context supports this decision"
             }}
         ],
-        "recommendation": "approve|reject|retry_with_modification",
+        "rule_results": [
+            {{
+                "rule": "The natural language rule being evaluated",
+                "satisfied": true,
+                "reason": "Explanation of why this rule is/isn't satisfied"
+            }}
+        ],
+        "recommendation": "approve",
         "explanation": "Overall explanation of the decision",
         "suggested_modification": "If retry recommended, what should be changed (optional)"
     }}
 }}
-
-Be thorough but balanced - approve when conditions are met, suggest modifications when they could be met, and only reject when there are serious safety concerns that cannot be addressed.
-
-IMPORTANT: DO NOT OUTPUT ANYTHING OTHER THAN THE JSON OBJECT. NO EXTRA BACKTICKS, WORDS, OR ANYTHING ELSE. THE RETURN STRING MUST BE PARSABLE AS JSON.
 """
