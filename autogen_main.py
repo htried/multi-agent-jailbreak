@@ -7,7 +7,6 @@ from autogen_ext.models.openai import OpenAIChatCompletionClient
 from multiagents.magentic_one import MagenticOne
 from multiagents.round_robin import RoundRobin
 from multiagents.selector import Selector
-from multiagents.swarm.swarm import SwarmTeam
 from autogen_agentchat import EVENT_LOGGER_NAME
 from autogen_agentchat.ui import Console
 import logging
@@ -129,7 +128,7 @@ def setup_logging(log_level=logging.INFO):
 
 if __name__ == "__main__":
     # Set up logging before parsing arguments
-    logger = setup_logging()
+    # logger = setup_logging()
     
     parser = argparse.ArgumentParser(description="Run MagenticOne.")
     parser.add_argument("--hil_mode", action="store_true", default=False, help="Run in human-in-the-loop mode")
