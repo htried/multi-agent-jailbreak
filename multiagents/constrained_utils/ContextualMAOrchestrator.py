@@ -178,6 +178,9 @@ class ContextualMAOrchestrator(MagenticOneOrchestrator):
             cancellation_token=cancellation_token
         )
         
+        print(response.content)
+        input()
+
         assert isinstance(response.content, str)
         try:
             capabilities_data = json.loads(response.content)
@@ -185,6 +188,7 @@ class ContextualMAOrchestrator(MagenticOneOrchestrator):
             await self._log_message(f"Extracted capabilities: {self._agent_capabilities}")
         except json.JSONDecodeError as e:
             await self._log_message(f"Failed to parse capabilities JSON: {e}")
+            raise e
             # Fallback to empty capabilities
             self._agent_capabilities = {}
 
@@ -202,6 +206,8 @@ class ContextualMAOrchestrator(MagenticOneOrchestrator):
             cancellation_token=cancellation_token
         )
         
+        print(response.content)
+        input()
         assert isinstance(response.content, str)
         try:
             cfg_data = json.loads(response.content)
@@ -218,6 +224,7 @@ class ContextualMAOrchestrator(MagenticOneOrchestrator):
             
         except json.JSONDecodeError as e:
             await self._log_message(f"Failed to parse CFG JSON: {e}")
+            raise e
             # Fallback to simple grammar
             self._cfg = self._create_fallback_grammar()
             self._parser = self._get_parser(self._cfg)
@@ -270,17 +277,38 @@ agent: "{agents_list}"
         assert isinstance(response.content, str)
         try:
             validation_result = json.loads(response.content)
-            return validation_result.get("validation_result", {
-                "overall_approved": False,
-                "recommendation": "reject",
-                "explanation": "Failed to parse validation result"
-            })
+            result = validation_result.get("validation_result", None)
+            
+            if result is None:
+                await self._log_message(f"No validation_result field found in response: {validation_result}")
+                # If no validation result but JSON is valid, default to cautious approval with manual review
+                return {
+                    "overall_approved": False,
+                    "recommendation": "retry_with_modification",
+                    "explanation": "Validation response missing required fields - please review manually",
+                    "suggested_modification": "Review the safety conditions and provide explicit confirmation"
+                }
+            
+            # Ensure required fields exist
+            if not isinstance(result.get("overall_approved"), bool):
+                await self._log_message(f"Invalid overall_approved field: {result}")
+                return {
+                    "overall_approved": False,
+                    "recommendation": "retry_with_modification", 
+                    "explanation": "Validation response has invalid approval status"
+                }
+            
+            return result
+            
         except json.JSONDecodeError as e:
             await self._log_message(f"Failed to parse guardrail validation JSON: {e}")
+            await self._log_message(f"Raw response: {response.content}")
+            # For JSON parsing errors, allow retry rather than immediate rejection
             return {
                 "overall_approved": False,
-                "recommendation": "reject",
-                "explanation": f"Failed to validate guardrails: {e}"
+                "recommendation": "retry_with_modification",
+                "explanation": f"Validation system error - JSON parsing failed: {e}",
+                "suggested_modification": "Simplify the task or provide more context for safety evaluation"
             }
 
     @rpc

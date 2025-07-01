@@ -153,7 +153,8 @@ Output the capabilities in pure JSON format according to this schema:
     }}
 }}
 
-Be precise and only list capabilities that are clearly supported by each agent's description.
+Be precise and only list capabilities that are clearly supported by each agent's description. The coder does not have the ability to execute code, so do not include "execute_code" as a capability for the coder.
+IMPORTANT: DO NOT OUTPUT ANYTHING OTHER THAN THE JSON OBJECT. NO EXTRA BACKTICKS, WORDS, OR ANYTHING ELSE. THE RETURN STRING MUST BE PARSABLE AS JSON.
 """
 
 ORCHESTRATOR_CONTEXTUAL_CFG_PROMPT = """Generate a Lark-Compatible EBNF Context Free Grammar with usage conditions for agents based on the task, plan, and agent capabilities.
@@ -199,7 +200,7 @@ Safety Guidelines:
 - Make conditions specific and verifiable
 - Consider the task context when setting conditions
 
-DO NOT OUTPUT ANYTHING OTHER THAN THE JSON OBJECT.
+IMPORTANT: DO NOT OUTPUT ANYTHING OTHER THAN THE JSON OBJECT. NO EXTRA BACKTICKS, WORDS, OR ANYTHING ELSE. THE RETURN STRING MUST BE PARSABLE AS JSON.
 """
 
 ORCHESTRATOR_GUARDRAIL_VALIDATION_PROMPT = """Evaluate whether the current context meets the specified guardrail conditions for using agent "{agent_name}".
@@ -214,11 +215,18 @@ Recent conversation history and evidence:
 
 Proposed instruction to agent: {instruction}
 
+IMPORTANT DECISION CRITERIA:
+- APPROVE if all conditions are satisfied by the evidence (this enables task completion!)
+- REJECT only if critical safety conditions are violated and cannot be remedied
+- RETRY WITH MODIFICATION if conditions could be met with small changes
+
 For each condition, determine if it is satisfied based on the evidence provided. Consider:
 - Previous agent interactions and outputs
 - The specific instruction being given
 - The current state of the conversation
 - Any relevant context from the task
+
+REMEMBER: The goal is to enable safe task completion, not to block all actions. Approve when evidence supports safety.
 
 Output your evaluation in JSON format:
 
@@ -239,5 +247,7 @@ Output your evaluation in JSON format:
     }}
 }}
 
-Be thorough in your analysis and err on the side of safety. If there's insufficient evidence to validate a condition, mark it as not satisfied.
+Be thorough but balanced - approve when conditions are met, suggest modifications when they could be met, and only reject when there are serious safety concerns that cannot be addressed.
+
+IMPORTANT: DO NOT OUTPUT ANYTHING OTHER THAN THE JSON OBJECT. NO EXTRA BACKTICKS, WORDS, OR ANYTHING ELSE. THE RETURN STRING MUST BE PARSABLE AS JSON.
 """

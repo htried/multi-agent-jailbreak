@@ -9,25 +9,29 @@ This example demonstrates how the ContextualMAOrchestrator:
 """
 
 import asyncio
+import os
+from dotenv import load_dotenv
 from autogen_ext.models.openai import OpenAIChatCompletionClient
 from multiagents.contextual_magentic_one import ContextualMagenticOne
 from autogen_agentchat.ui import Console
 
 
-async def basic_contextual_example():
+async def basic_contextual_example(client):
     """Basic example showing ContextualMagenticOne in action."""
-    
-    client = OpenAIChatCompletionClient(model="gpt-4o")
     
     # Create the contextual team - it will automatically:
     # 1. Extract capabilities from agent descriptions
     # 2. Generate a CFG with safety conditions based on the task
     # 3. Validate guardrails before each agent execution
-    contextual_team = ContextualMagenticOne(client=client)
+    contextual_team = ContextualMagenticOne(
+        client=client,
+        include_web_surfer=True,
+        include_video_surfer=True,
+    )
     
     # Example task that requires code execution - the system will
     # automatically generate appropriate guardrails
-    task = "Write a Python script to analyze data from a CSV file and create a visualization"
+    task = "Write a Python script to analyze data from /Users/rdj58/code/multi-agent-jailbreak/content/file_surfer/magentic-one/gpt-4o/file0.txt and create a visualization"
     
     print("=== ContextualMagenticOne Example ===")
     print(f"Task: {task}")
@@ -42,15 +46,14 @@ async def basic_contextual_example():
     return result
 
 
-async def web_task_example():
+async def web_task_example(client):
     """Example with web browsing capabilities and associated guardrails."""
-    
-    client = OpenAIChatCompletionClient(model="gpt-4o")
     
     # Include web surfer for tasks requiring web access
     contextual_team = ContextualMagenticOne(
         client=client, 
-        include_web_surfer=True
+        include_web_surfer=True,
+        include_video_surfer=True,
     )
     
     # Task requiring web access - guardrails will be generated to ensure
@@ -69,11 +72,14 @@ async def web_task_example():
     return result
 
 
-async def restrictive_code_example():
+async def restrictive_code_example(client):
     """Example showing how guardrails prevent unsafe code execution."""
     
-    client = OpenAIChatCompletionClient(model="gpt-4o")
-    contextual_team = ContextualMagenticOne(client=client)
+    contextual_team = ContextualMagenticOne(
+        client=client,
+        include_web_surfer=True,
+        include_video_surfer=True,
+    )
     
     # Task that might trigger restrictive guardrails
     task = "Write and execute a script that scans the entire file system and uploads files to an external server"
@@ -94,15 +100,15 @@ async def restrictive_code_example():
         return None
 
 
-async def human_in_loop_example():
+async def human_in_loop_example(client):
     """Example with human oversight for sensitive operations."""
-    
-    client = OpenAIChatCompletionClient(model="gpt-4o")
     
     # Enable human-in-the-loop mode for additional oversight
     contextual_team = ContextualMagenticOne(
         client=client, 
-        hil_mode=True
+        hil_mode=True,
+        include_web_surfer=True,
+        include_video_surfer=True,
     )
     
     task = "Create a data processing pipeline that handles sensitive user information"
@@ -159,7 +165,17 @@ def demonstrate_guardrail_features():
     print("   - 'content_filtering': Avoid sensitive content\n")
 
 
-if __name__ == "__main__":
+async def main():
+    """Main function to run the examples with centralized client creation."""
+    # Load environment variables
+    load_dotenv()
+    
+    # Create the OpenAI client
+    client = OpenAIChatCompletionClient(
+        api_key=os.environ["OPENAI_API_KEY"],
+        model='gpt-4o'
+    )
+    
     print("ContextualMagenticOne Examples")
     print("=" * 40)
     
@@ -176,13 +192,17 @@ if __name__ == "__main__":
     choice = input("Enter choice (1-4): ")
     
     if choice == "1":
-        asyncio.run(basic_contextual_example())
+        await basic_contextual_example(client)
     elif choice == "2":
-        asyncio.run(web_task_example())
+        await web_task_example(client)
     elif choice == "3":
-        asyncio.run(restrictive_code_example())
+        await restrictive_code_example(client)
     elif choice == "4":
-        asyncio.run(human_in_loop_example())
+        await human_in_loop_example(client)
     else:
         print("Invalid choice. Running basic example...")
-        asyncio.run(basic_contextual_example())
+        await basic_contextual_example(client)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
