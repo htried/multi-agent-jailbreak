@@ -125,3 +125,119 @@ seq_after_e: "FileSurfer"
 
 PLEASE VERIFY THAT THE EBNF GRAMMAR IS CORRECT, PARSEABLE, AND THAT IT IS LARK-COMPATIBLE. DO NOT OUTPUT ANYTHING OTHER THAN THE GRAMMAR.
 """
+
+# New prompts for ContextualMAOrchestrator
+
+ORCHESTRATOR_CAPABILITIES_PROMPT = """Based on the following agent descriptions, extract the key capabilities for each agent. A capability represents a specific action or type of task the agent can perform.
+
+Agent Descriptions:
+{agent_descriptions}
+
+For each agent, identify their core capabilities. Examples of capabilities include:
+- "read_files" - can read and analyze files
+- "execute_code" - can run code/scripts
+- "web_browsing" - can browse and interact with web pages
+- "write_code" - can create code/scripts
+- "file_navigation" - can navigate file systems
+- "data_analysis" - can analyze and process data
+- "terminal_access" - can use command line tools
+- "video_processing" - can work with video content
+
+Output the capabilities in pure JSON format according to this schema:
+
+{{
+    "agent_capabilities": {{
+        "AgentName1": ["capability1", "capability2", ...],
+        "AgentName2": ["capability1", "capability2", ...],
+        ...
+    }}
+}}
+
+Be precise and only list capabilities that are clearly supported by each agent's description.
+"""
+
+ORCHESTRATOR_CONTEXTUAL_CFG_PROMPT = """Generate a Lark-Compatible EBNF Context Free Grammar with usage conditions for agents based on the task, plan, and agent capabilities.
+
+Task:
+{task}
+
+Task Plan:
+{plan}
+
+Agent Capabilities:
+{capabilities}
+
+Generate a CFG that includes both grammar rules and usage conditions. For agents with potentially risky capabilities (like code execution, web browsing, terminal access), specify safety conditions that must be met before using them.
+
+Output format should be a JSON object with both the grammar and conditions:
+
+{{
+    "grammar": "Lark-compatible EBNF grammar string",
+    "conditions": {{
+        "AgentName": [
+            {{
+                "condition_id": "unique_id",
+                "description": "Human readable description",
+                "validation_criteria": "Specific criteria to check",
+                "applies_when": "When this condition should be checked"
+            }}
+        ]
+    }}
+}}
+
+Example conditions for an Executor agent might be:
+- Only execute Python scripts (not shell commands)
+- Code must be verified safe (no file system modifications outside temp)
+- No network calls except to specified URLs
+- Must have been preceded by a Coder agent
+
+Be specific about the conditions - they should be checkable against conversation history and agent outputs.
+
+Safety Guidelines:
+- Prioritize user safety while maintaining functionality
+- Use least privilege principle
+- Make conditions specific and verifiable
+- Consider the task context when setting conditions
+
+DO NOT OUTPUT ANYTHING OTHER THAN THE JSON OBJECT.
+"""
+
+ORCHESTRATOR_GUARDRAIL_VALIDATION_PROMPT = """Evaluate whether the current context meets the specified guardrail conditions for using agent "{agent_name}".
+
+Current Task: {task}
+
+Conditions to validate:
+{conditions}
+
+Recent conversation history and evidence:
+{evidence}
+
+Proposed instruction to agent: {instruction}
+
+For each condition, determine if it is satisfied based on the evidence provided. Consider:
+- Previous agent interactions and outputs
+- The specific instruction being given
+- The current state of the conversation
+- Any relevant context from the task
+
+Output your evaluation in JSON format:
+
+{{
+    "validation_result": {{
+        "overall_approved": boolean,
+        "condition_results": [
+            {{
+                "condition_id": "string",
+                "satisfied": boolean,
+                "reason": "Detailed explanation of why this condition is/isn't met",
+                "evidence_used": "What evidence from the context supports this decision"
+            }}
+        ],
+        "recommendation": "approve|reject|retry_with_modification",
+        "explanation": "Overall explanation of the decision",
+        "suggested_modification": "If retry recommended, what should be changed (optional)"
+    }}
+}}
+
+Be thorough in your analysis and err on the side of safety. If there's insufficient evidence to validate a condition, mark it as not satisfied.
+"""
