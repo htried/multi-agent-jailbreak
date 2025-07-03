@@ -273,19 +273,6 @@ class ContextualMAOrchestrator(MagenticOneOrchestrator):
             await self._log_message(f"Raw response: {response.content}")
             raise e
 
-    def _create_fallback_grammar(self) -> str:
-        """Create a simple fallback grammar if CFG generation fails."""
-        agents_list = '"\n        | "'.join(self._participant_names)
-        return f"""start: agents
-
-agents: agent
-        | agent agents
-
-agent: "{agents_list}"
-
-%import common.WS
-%ignore WS"""
-
     async def _validate_guardrails(self, agent_name: str, instruction: str, cancellation_token: CancellationToken) -> Dict[str, Any]:
         """Validate guardrail conditions and natural language rules for the selected agent."""
         # Get natural language rules for this agent

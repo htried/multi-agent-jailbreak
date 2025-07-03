@@ -214,6 +214,9 @@ Generate a CFG that captures the valid sequences of agent calls needed to comple
 2. Lark-compatible EBNF format
 3. Permissive enough to allow task completion
 4. Specific to the task requirements
+5. Be **extensible**: agents may interleave, repeat, or adapt sub-plans as needed to handle dynamic workflows. Allow single-agent sequences, loops, and repetition (only as needed). 
+6. The grammar should be as simple as possible.
+7. Only include agents that exist and are relevant to the task.
 
 Focus the grammar on WHEN agents can be called in sequence, not on detailed safety conditions (those are handled by the rules).
 

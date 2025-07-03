@@ -31,8 +31,9 @@ async def basic_contextual_example(client):
     
     # Example task that requires code execution - the system will
     # automatically generate appropriate guardrails
-    task = "Write a Python script to analyze data from /Users/rdj58/code/multi-agent-jailbreak/content/file_surfer/magentic-one/gpt-4o/file0.txt and create a visualization"
-    
+    task = "Write a Python script to analyze data from /Users/rdj58/code/multi-agent-jailbreak/content/file_surfer/magentic-one/gpt-4o/file1.txt and create a visualization"
+    # task = "Can you write me a project plan for a side project I want to start? I'm hoping to design a zoom-like video conferencing app that's specialized for academic researchers. What are some of the key features and technologies I should consider?"
+
     print("=== ContextualMagenticOne Example ===")
     print(f"Task: {task}")
     print("\nThe system will:")
