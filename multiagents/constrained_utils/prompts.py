@@ -1,3 +1,6 @@
+from pydantic import BaseModel, Field, ConfigDict
+from typing import Dict, List, Any
+
 ORCHESTRATOR_PROGRESS_LEDGER_PROMPT = """
 Recall we are working on the following request:
 
@@ -126,6 +129,59 @@ seq_after_e: "FileSurfer"
 PLEASE VERIFY THAT THE EBNF GRAMMAR IS CORRECT, PARSEABLE, AND THAT IT IS LARK-COMPATIBLE. DO NOT OUTPUT ANYTHING OTHER THAN THE GRAMMAR.
 """
 
+
+# create a class for the output of the capabilities prompt
+class AgentCapability(BaseModel):
+    agent_name: str
+    capabilities: List[str]
+
+class AgentCapabilities(BaseModel):
+    agent_capabilities: List[AgentCapability]
+
+class AgentRule(BaseModel):
+    agent_name: str
+    rules: List[str]
+
+class NaturalLanguageRules(BaseModel):
+    natural_language_rules: List[AgentRule]
+
+class ConditionItem(BaseModel):
+    condition_id: str
+    description: str
+    validation_criteria: str
+    applies_when: str
+
+class AgentCondition(BaseModel):
+    agent_name: str
+    conditions: List[ConditionItem]
+
+class ContextualCFG(BaseModel):
+    grammar: str
+    conditions: List[AgentCondition]
+
+class ConditionResult(BaseModel):
+    condition_id: str
+    satisfied: bool
+    reason: str
+    evidence_used: str
+
+class RuleResult(BaseModel):
+    rule: str
+    satisfied: bool
+    reason: str
+
+class ValidationResult(BaseModel):
+    overall_approved: bool
+    condition_results: List[ConditionResult]
+    rule_results: List[RuleResult]
+    recommendation: str
+    explanation: str
+    suggested_modification: str
+
+class GuardrailValidation(BaseModel):
+    validation_result: ValidationResult
+
+
 # New prompts for ContextualMAOrchestrator
 
 ORCHESTRATOR_CAPABILITIES_PROMPT = """Based on the following task, plan, and agent descriptions, extract the key capabilities that each agent will need specifically for this task. Focus only on capabilities that are relevant to completing the given task and plan.
@@ -152,11 +208,16 @@ Only include capabilities that are clearly needed for this specific task and pla
 Output ONLY a pure JSON object with no additional text, backticks, or formatting:
 
 {{
-    "agent_capabilities": {{
-        "AgentName1": ["capability1", "capability2", ...],
-        "AgentName2": ["capability1", "capability2", ...],
-        ...
-    }}
+    "agent_capabilities": [
+        {{
+            "agent_name": "AgentName1",
+            "capabilities": ["capability1", "capability2", ...]
+        }},
+        {{
+            "agent_name": "AgentName2", 
+            "capabilities": ["capability1", "capability2", ...]
+        }}
+    ]
 }}
 """
 
@@ -184,16 +245,22 @@ Example rules:
 Output ONLY a pure JSON object with no additional text, backticks, or formatting:
 
 {{
-    "natural_language_rules": {{
-        "AgentName1": [
-            "Rule 1 for this agent",
-            "Rule 2 for this agent"
-        ],
-        "AgentName2": [
-            "Rule 1 for this agent",
-            "Rule 2 for this agent"  
-        ]
-    }}
+    "natural_language_rules": [
+        {{
+            "agent_name": "AgentName1",
+            "rules": [
+                "Rule 1 for this agent",
+                "Rule 2 for this agent"
+            ]
+        }},
+        {{
+            "agent_name": "AgentName2",
+            "rules": [
+                "Rule 1 for this agent",
+                "Rule 2 for this agent"
+            ]
+        }}
+    ]
 }}
 """
 
@@ -224,16 +291,19 @@ Output ONLY a pure JSON object with no additional text, backticks, or formatting
 
 {{
     "grammar": "start: agents\n\nagents: agent\n        | agent agents\n\nagent: \"Agent1\"\n        | \"Agent2\"\n\n%import common.WS\n%ignore WS",
-    "conditions": {{
-        "AgentName": [
-            {{
-                "condition_id": "unique_id",
-                "description": "Human readable description", 
-                "validation_criteria": "Specific criteria to check",
-                "applies_when": "When this condition should be checked"
-            }}
-        ]
-    }}
+    "conditions": [
+        {{
+            "agent_name": "AgentName",
+            "conditions": [
+                {{
+                    "condition_id": "unique_id",
+                    "description": "Human readable description", 
+                    "validation_criteria": "Specific criteria to check",
+                    "applies_when": "When this condition should be checked"
+                }}
+            ]
+        }}
+    ]
 }}
 """
 

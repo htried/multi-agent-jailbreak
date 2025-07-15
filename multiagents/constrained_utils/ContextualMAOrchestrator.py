@@ -44,6 +44,10 @@ from lark.exceptions import UnexpectedEOF, UnexpectedToken
 from typing import Set
 
 from multiagents.constrained_utils.prompts import (
+    AgentCapabilities,
+    ContextualCFG,
+    GuardrailValidation,
+    NaturalLanguageRules,
     ORCHESTRATOR_PROGRESS_LEDGER_PROMPT, 
     ORCHESTRATOR_CAPABILITIES_PROMPT,
     ORCHESTRATOR_NATURAL_LANGUAGE_RULES_PROMPT,
@@ -189,22 +193,37 @@ class ContextualMAOrchestrator(MagenticOneOrchestrator):
             UserMessage(content=self._get_capabilities_prompt(self._task, self._plan, agent_descriptions), source=self._name)
         )
         
-        response = await self._model_client.create(
-            self._get_compatible_context(capabilities_conversation), 
-            cancellation_token=cancellation_token
-        )
+        if self._model_client.model_info.get("structured_output", False):
+            response = await self._model_client.create(
+                self._get_compatible_context(capabilities_conversation), 
+                json_output=AgentCapabilities
+            )
+        elif self._model_client.model_info.get("json_output", False):
+            response = await self._model_client.create(
+                self._get_compatible_context(capabilities_conversation), 
+                cancellation_token=cancellation_token,
+                json_output=True
+            )
+        else:
+            response = await self._model_client.create(
+                self._get_compatible_context(capabilities_conversation), 
+                cancellation_token=cancellation_token
+            )
         
-        print(response.content)
-        input()
-
-        assert isinstance(response.content, str)
+        capabilities_str = response.content
         try:
-            cleaned_content = self._clean_json_response(response.content)
-            capabilities_data = json.loads(cleaned_content)
-            self._agent_capabilities = capabilities_data.get("agent_capabilities", {})
+            assert isinstance(capabilities_str, str)
+            capabilities_list = extract_json_from_str(capabilities_str)[0]
+            capabilities_list = capabilities_list["agent_capabilities"]
+
+            self._agent_capabilities = {}
+            for agent_capability in capabilities_list:
+                agent_name = agent_capability["agent_name"]
+                capabilities = agent_capability["capabilities"]
+                self._agent_capabilities[agent_name] = capabilities
             await self._log_message(f"Extracted capabilities: {self._agent_capabilities}")
         except json.JSONDecodeError as e:
-            await self._log_message(f"Failed to parse capabilities JSON: {e}")
+            await self._log_message(f"Invalid capabilities format encountered: {e}")
             await self._log_message(f"Raw response: {response.content}")
             raise e
 
@@ -217,23 +236,41 @@ class ContextualMAOrchestrator(MagenticOneOrchestrator):
             UserMessage(content=self._get_natural_language_rules_prompt(self._task, self._plan, capabilities_str), source=self._name)
         )
         
-        response = await self._model_client.create(
-            self._get_compatible_context(rules_conversation), 
-            cancellation_token=cancellation_token
-        )
+        if self._model_client.model_info.get("structured_output", False):
+            response = await self._model_client.create(
+                self._get_compatible_context(rules_conversation), 
+                json_output=NaturalLanguageRules
+            )
+        elif self._model_client.model_info.get("json_output", False):
+            response = await self._model_client.create(
+                self._get_compatible_context(rules_conversation), 
+                cancellation_token=cancellation_token,
+                json_output=True
+            )
+        else:
+            response = await self._model_client.create(
+                self._get_compatible_context(rules_conversation), 
+                cancellation_token=cancellation_token
+            )
         
-        print(response.content)
-        input()
-
-        assert isinstance(response.content, str)
+        rules_str = response.content
+        assert isinstance(rules_str, str)
         try:
-            cleaned_content = self._clean_json_response(response.content)
-            rules_data = json.loads(cleaned_content)
-            self._natural_language_rules = rules_data.get("natural_language_rules", {})
+            rules_data = extract_json_from_str(rules_str)[0]
+            
+            # Use the known structure from NaturalLanguageRules model
+            rules_list = rules_data["natural_language_rules"]
+            self._natural_language_rules = {}
+            for agent_rule in rules_list:
+                agent_name = agent_rule["agent_name"]
+                rules = agent_rule["rules"]
+                self._natural_language_rules[agent_name] = rules
+            print(f"Natural language rules: {self._natural_language_rules}")
+            input()
             await self._log_message(f"Generated natural language rules: {self._natural_language_rules}")
         except json.JSONDecodeError as e:
-            await self._log_message(f"Failed to parse natural language rules JSON: {e}")
-            await self._log_message(f"Raw response: {response.content}")
+            await self._log_message(f"Invalid natural language rules format encountered: {e}")
+            await self._log_message(f"Raw response: {rules_str}")
             raise e
 
     async def _generate_contextual_cfg(self, cancellation_token: CancellationToken) -> None:
@@ -246,20 +283,41 @@ class ContextualMAOrchestrator(MagenticOneOrchestrator):
             UserMessage(content=self._get_contextual_cfg_prompt(self._task, self._plan, capabilities_str, rules_str), source=self._name)
         )
         
-        response = await self._model_client.create(
-            self._get_compatible_context(cfg_conversation), 
-            cancellation_token=cancellation_token
-        )
+        if self._model_client.model_info.get("structured_output", False):
+            response = await self._model_client.create(
+                self._get_compatible_context(cfg_conversation), 
+                json_output=ContextualCFG
+            )
+        elif self._model_client.model_info.get("json_output", False):
+            response = await self._model_client.create(
+                self._get_compatible_context(cfg_conversation), 
+                cancellation_token=cancellation_token,
+                json_output=True
+            )
+        else:
+            response = await self._model_client.create(
+                self._get_compatible_context(cfg_conversation), 
+                cancellation_token=cancellation_token
+            )
         
-        print(response.content)
-        input()
-        assert isinstance(response.content, str)
+        cfg_str = response.content
+        assert isinstance(cfg_str, str)
         try:
-            cleaned_content = self._clean_json_response(response.content)
-            cfg_data = json.loads(cleaned_content)
-            self._cfg = cfg_data.get("grammar", "")
-            self._agent_conditions = cfg_data.get("conditions", {})
+            cfg_data = extract_json_from_str(cfg_str)[0]
             
+            # Use the known structure from ContextualCFG model
+            self._cfg = cfg_data["grammar"]
+            conditions_list = cfg_data["conditions"]
+            
+            # Convert list format to dict for easier lookup
+            self._agent_conditions = {}
+            for agent_condition in conditions_list:
+                agent_name = agent_condition["agent_name"]
+                conditions = agent_condition["conditions"]
+                self._agent_conditions[agent_name] = conditions
+            
+            print(f"Agent conditions: {self._agent_conditions}")
+            input()
             # Clean up the grammar
             self._cfg = re.sub(r"^\s+|\s+$|`+", "", self._cfg)
             self._cfg = re.sub(r"ebnf", "", self._cfg)
@@ -269,8 +327,8 @@ class ContextualMAOrchestrator(MagenticOneOrchestrator):
             await self._log_message(f"Agent conditions: {self._agent_conditions}")
             
         except json.JSONDecodeError as e:
-            await self._log_message(f"Failed to parse CFG JSON: {e}")
-            await self._log_message(f"Raw response: {response.content}")
+            await self._log_message(f"Invalid CFG format encountered: {e}")
+            await self._log_message(f"Raw response: {cfg_str}")
             raise e
 
     async def _validate_guardrails(self, agent_name: str, instruction: str, cancellation_token: CancellationToken) -> Dict[str, Any]:
@@ -304,25 +362,30 @@ class ContextualMAOrchestrator(MagenticOneOrchestrator):
             )
         )
         
-        response = await self._model_client.create(
-            self._get_compatible_context(guardrail_conversation), 
-            cancellation_token=cancellation_token
-        )
+        if self._model_client.model_info.get("structured_output", False):
+            response = await self._model_client.create(
+                self._get_compatible_context(guardrail_conversation), 
+                json_output=GuardrailValidation
+            )
+        elif self._model_client.model_info.get("json_output", False):
+            response = await self._model_client.create(
+                self._get_compatible_context(guardrail_conversation), 
+                cancellation_token=cancellation_token,
+                json_output=True
+            )
+        else:
+            response = await self._model_client.create(
+                self._get_compatible_context(guardrail_conversation), 
+                cancellation_token=cancellation_token
+            )
         
-        assert isinstance(response.content, str)
+        validation_str = response.content
+        assert isinstance(validation_str, str)
         try:
-            cleaned_content = self._clean_json_response(response.content)
-            validation_result = json.loads(cleaned_content)
-            result = validation_result.get("validation_result", None)
+            validation_result = extract_json_from_str(validation_str)[0]
             
-            if result is None:
-                await self._log_message(f"No validation_result field found in response: {validation_result}")
-                return {
-                    "overall_approved": False,
-                    "recommendation": "retry_with_modification",
-                    "explanation": "Validation response missing required fields - please review manually",
-                    "suggested_modification": "Review the safety conditions and provide explicit confirmation"
-                }
+            # Use the known structure from GuardrailValidation model
+            result = validation_result["validation_result"]
             
             # Ensure required fields exist
             if not isinstance(result.get("overall_approved"), bool):
@@ -333,11 +396,12 @@ class ContextualMAOrchestrator(MagenticOneOrchestrator):
                     "explanation": "Validation response has invalid approval status"
                 }
             
+            # Return the validation result directly since it should already be in the right format
             return result
             
         except json.JSONDecodeError as e:
-            await self._log_message(f"Failed to parse guardrail validation JSON: {e}")
-            await self._log_message(f"Raw response: {response.content}")
+            await self._log_message(f"Invalid guardrail validation format encountered: {e}")
+            await self._log_message(f"Raw response: {validation_str}")
             return {
                 "overall_approved": False,
                 "recommendation": "retry_with_modification",
@@ -621,9 +685,6 @@ class ContextualMAOrchestrator(MagenticOneOrchestrator):
                 topic_id=DefaultTopicId(type=self._output_topic_type),
             )
             await self._output_message_queue.put(select_msg)
-        
+
         self._current_speaker_sequence.append(next_speaker)
         await self._log_message(f"Current speaker sequence: {self._current_speaker_sequence}")
-
-    # TODO: infinite orchestrator support
-    # TODO: Might need to work on reset
