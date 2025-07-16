@@ -139,31 +139,36 @@ class AgentCapabilities(BaseModel):
     agent_capabilities: List[AgentCapability]
 
 class AgentRule(BaseModel):
-    agent_name: str
-    rules: List[str]
-
-class NaturalLanguageRules(BaseModel):
-    natural_language_rules: List[AgentRule]
-
-class ConditionItem(BaseModel):
-    condition_id: str
+    rule_id: str
     description: str
     validation_criteria: str
-    applies_when: str
 
-class AgentCondition(BaseModel):
+class Rules(BaseModel):
     agent_name: str
-    conditions: List[ConditionItem]
+    agent_rules: List[AgentRule]
+
+class NaturalLanguageRules(BaseModel):
+    natural_language_rules: List[Rules]
+
+# class ConditionItem(BaseModel):
+#     condition_id: str
+#     description: str
+#     validation_criteria: str
+#     applies_when: str
+
+# class AgentCondition(BaseModel):
+#     agent_name: str
+#     conditions: List[ConditionItem]
 
 class ContextualCFG(BaseModel):
     grammar: str
-    conditions: List[AgentCondition]
+    # conditions: List[AgentCondition]
 
-class ConditionResult(BaseModel):
-    condition_id: str
-    satisfied: bool
-    reason: str
-    evidence_used: str
+# class ConditionResult(BaseModel):
+#     condition_id: str
+#     satisfied: bool
+#     reason: str
+#     evidence_used: str
 
 class RuleResult(BaseModel):
     rule: str
@@ -172,7 +177,7 @@ class RuleResult(BaseModel):
 
 class ValidationResult(BaseModel):
     overall_approved: bool
-    condition_results: List[ConditionResult]
+    # condition_results: List[ConditionResult]
     rule_results: List[RuleResult]
     recommendation: str
     explanation: str
@@ -183,6 +188,53 @@ class GuardrailValidation(BaseModel):
 
 
 # New prompts for ContextualMAOrchestrator
+
+ORCHESTRATOR_CONTEXTUAL_PROGRESS_LEDGER_PROMPT = """
+Recall we are working on the following request:
+
+{task}
+
+And we have assembled the following team (based on the safety context free grammar!):
+
+{team}
+
+Each member of the team is subject to the following rules:
+
+{rules}
+
+To make progress on the request, please answer the following questions, including necessary reasoning:
+
+    - Is the request fully satisfied? (True if complete, there are no more AVAILABLE AND APPROPRIATE agents that can be used to make progress on the request. False if the original request has yet to be SUCCESSFULLY and FULLY addressed)
+    - Are we in a loop where we are repeating the same requests and / or getting the same responses as before? Loops can span multiple turns, and can include repeated actions like scrolling up or down more than a handful of times.
+    - Are we making forward progress? (True if just starting, or recent messages are adding value. False if recent messages show evidence of being stuck in a loop or if there is evidence of significant barriers to success such as the inability to read from a required file)
+    - Who should speak next? (select from: {names}). Remember, for the user's safety, take into account the rules above. IT IS CRITICAL to ONLY select from these names EVEN IF you've spoken to someone else in the past. It is useless to assign a task to an agent that is not available or inappropriate (better to end the conversation). Also recall that the coder agent cannot run / execute code.
+    - What instruction or question would you give this team member? (Phrase as if speaking directly to them, and include any specific information they may need)
+
+Please output an answer in pure JSON format according to the following schema. The JSON object must be parsable as-is. DO NOT OUTPUT ANYTHING OTHER THAN JSON, AND DO NOT DEVIATE FROM THIS SCHEMA:
+
+    {{
+       "is_request_satisfied": {{
+            "reason": string,
+            "answer": boolean
+        }},
+        "is_in_loop": {{
+            "reason": string,
+            "answer": boolean
+        }},
+        "is_progress_being_made": {{
+            "reason": string,
+            "answer": boolean
+        }},
+        "next_speaker": {{
+            "reason": string,
+            "answer": string (select from: {names})
+        }},
+        "instruction_or_question": {{
+            "reason": string,
+            "answer": string
+        }}
+    }}
+"""
 
 ORCHESTRATOR_CAPABILITIES_PROMPT = """Based on the following task, plan, and agent descriptions, extract the key capabilities that each agent will need specifically for this task. Focus only on capabilities that are relevant to completing the given task and plan.
 
@@ -203,7 +255,7 @@ For each agent, identify their core capabilities that are RELEVANT TO THIS SPECI
 - "terminal_access" - can use command line tools
 - "video_processing" - can work with video content
 
-Only include capabilities that are clearly needed for this specific task and plan. Be precise and task-focused.
+Only include capabilities that are clearly needed for this specific task and plan. Be precise and task-focused. Exclude any agents that do not have relevant capabilities for the task.
 
 Output ONLY a pure JSON object with no additional text, backticks, or formatting:
 
@@ -221,7 +273,7 @@ Output ONLY a pure JSON object with no additional text, backticks, or formatting
 }}
 """
 
-ORCHESTRATOR_NATURAL_LANGUAGE_RULES_PROMPT = """Based on the task, plan, and agent capabilities, generate natural language safety rules that govern when and how each agent can be used. These rules should be specific, actionable, and focused on safety while enabling task completion.
+ORCHESTRATOR_NATURAL_LANGUAGE_RULES_PROMPT = """Based on the task, plan, and agent capabilities, generate **succinct, enforceable, and minimal** natural language safety rules that govern when and how each agent may be used. These rules must prioritize **safety**, **task relevance**, and **auditability**, and must be **verifiable using the last few messages in the conversation**.
 
 Task: {task}
 
@@ -230,39 +282,109 @@ Plan: {plan}
 Agent Capabilities:
 {capabilities}
 
-Generate specific natural language rules for each agent based on their capabilities and the task context. Focus on:
-- When each agent should be used
-- What prerequisites must be met
-- What safety constraints apply
-- What actions are allowed/forbidden
+Your objective is to define **only the essential rules** for each agent involved in the task. Avoid speculative, redundant, or overly broad constraints. Focus on **realistic misuse scenarios** and **high-risk actions** (e.g., code execution, file access, external communication).
 
-Example rules:
-- "Coder can only be used after requirements have been clearly specified"
-- "Executor can only run Python scripts, not shell commands"
-- "WebSurfer must only visit URLs related to the task objective"
-- "FileSurfer can only read files, not modify them"
+For each agent, define:
+- **Permitted usage**: When and how the agent may be used in this task.
+- **Preconditions**: What must be true before the agent is invoked.
+- **Safety constraints**: What must never occur during the agent's operation.
+- **Explicit permissions and prohibitions**: Be clear and conservative.
 
-Output ONLY a pure JSON object with no additional text, backticks, or formatting:
+Guiding principles:
+- **Relevance**: Only include agents that are necessary for the task. Exclude others.
+- **Least privilege**: Grant only the minimum access and capabilities required.
+- **Enforceability**: Rules must be verifiable using recent conversation context (e.g., task description, plan, agent outputs).
+- **Clarity**: Rules must be short, unambiguous, and suitable for automated or human validation.
+
+**Validation criteria examples**:
+- "Input must match a URL returned by WebSurfer in the last 3 messages."
+- "Code must be generated by Coder and not contain `os`, `subprocess`, or `open()`."
+- "File path must match the uploaded file path and not include '../'."
+- "Summary must reference only facts present in FileSurfer output."
+
+Example rules (non-exhaustive):
+- Executor: "Only execute Python code output by Coder."
+- Executor: "Only run files who's contents have been fully described in English by the FileSurfer."
+- WebSurfer: "May only access URLs explicitly mentioned in the task plan."
+- FileSurfer: "May read files only from the task input directory; must not write or delete files."
+- Coder: "May only generate code directly required to fulfill the task objective."
 
 {{
     "natural_language_rules": [
         {{
             "agent_name": "AgentName1",
-            "rules": [
-                "Rule 1 for this agent",
-                "Rule 2 for this agent"
-            ]
-        }},
-        {{
-            "agent_name": "AgentName2",
-            "rules": [
-                "Rule 1 for this agent",
-                "Rule 2 for this agent"
+            "agent_rules": [
+                {{
+                    "rule_id": "unique_id",
+                    "description": "Rule 1 human readable description", 
+                    "validation_criteria": "Rule 1 specific criteria to check",
+                }},
+                {{
+                    "rule_id": "unique_id",
+                    "description": "Rule 2 human readable description", 
+                    "validation_criteria": "Rule 2 specific criteria to check",
+                }}
             ]
         }}
     ]
 }}
 """
+
+
+ORCHESTRATOR_NATURAL_LANGUAGE_RULES_EXECUTOR_PROMPT = """Based on the task, plan, and agent capabilities, generate **succinct, enforceable, and minimal** natural language safety rules that govern when and how the "Executor" Agent should be used. These rules must prioritize **safety**, **task relevance**, and **auditability**, and must be **verifiable using the last few messages in the conversation**.
+
+Task: {task}
+
+Plan: {plan}
+
+Agent Capabilities:
+{capabilities}
+
+Your objective is to define **only the essential rules**. Avoid speculative, redundant, or overly broad constraints. Focus on **realistic misuse scenarios** and **high-risk actions** associated with code execution, file access, and external communication.
+
+Think about:
+- **Permitted usage**: When and how the agent may be used in this task.
+- **Preconditions**: What must be true before the agent is invoked.
+- **Safety constraints**: What must never occur during the agent's operation.
+- **Explicit permissions and prohibitions**: Be clear and conservative.
+
+Guiding principles:
+- **Least privilege**: Grant only the minimum access and capabilities required.
+- **Enforceability**: Rules must be verifiable using recent conversation context (e.g., task description, plan, agent outputs).
+- **Clarity**: Rules must be short, unambiguous, and suitable for automated or human validation.
+- **Contextual**: Rules should be specific to the task and the agents involved.
+
+**Validation criteria examples**:
+- "Code should be audited for safety before execution by another agent."
+- "Code must be generated by Coder and not contain `os`, `subprocess`, or `open()`."
+- "File paths must match the uploaded file path and not include '../'."
+
+Example rules (non-exhaustive):
+- Executor: "Only execute Python code output by Coder."
+- Executor: "Only run files who's contents have been fully described in English by the FileSurfer."
+
+{{
+    "natural_language_rules": [
+        {{
+            "agent_name": "Executor",
+            "agent_rules": [
+                {{
+                    "rule_id": "unique_id",
+                    "description": "Rule 1 human readable description", 
+                    "validation_criteria": "Rule 1 specific criteria to check",
+                }},
+                {{
+                    "rule_id": "unique_id",
+                    "description": "Rule 2 human readable description", 
+                    "validation_criteria": "Rule 2 specific criteria to check",
+                }}
+            ]
+        }}
+    ]
+}}
+"""
+
+
 
 ORCHESTRATOR_CONTEXTUAL_CFG_PROMPT = """Generate a Lark-Compatible EBNF Context Free Grammar based on the task, plan, capabilities, and natural language rules. The grammar should enforce the sequence constraints while the rules will be enforced separately during execution.
 
@@ -289,33 +411,18 @@ Focus the grammar on WHEN agents can be called in sequence, not on detailed safe
 
 Output ONLY a pure JSON object with no additional text, backticks, or formatting:
 
+Example Grammar:
 {{
-    "grammar": "start: agents\n\nagents: agent\n        | agent agents\n\nagent: \"Agent1\"\n        | \"Agent2\"\n\n%import common.WS\n%ignore WS",
-    "conditions": [
-        {{
-            "agent_name": "AgentName",
-            "conditions": [
-                {{
-                    "condition_id": "unique_id",
-                    "description": "Human readable description", 
-                    "validation_criteria": "Specific criteria to check",
-                    "applies_when": "When this condition should be checked"
-                }}
-            ]
-        }}
-    ]
+    "grammar": "start: agents\n\nagents: agent\n        | agent agents\n\nagent: \"Agent1\"\n        | \"Agent2\"\n\n%import common.WS\n%ignore WS"
 }}
 """
 
-ORCHESTRATOR_GUARDRAIL_VALIDATION_PROMPT = """Evaluate whether the current context meets the specified guardrail conditions for using agent "{agent_name}".
+ORCHESTRATOR_GUARDRAIL_VALIDATION_PROMPT = """Evaluate whether the current context meets the specified guardrail conditions for using agent "{agent_name}" by looking for specific evidence.
 
 Current Task: {task}
 
 Natural Language Rules for {agent_name}:
 {rules}
-
-Conditions to validate:
-{conditions}
 
 Recent conversation history and evidence:
 {evidence}
@@ -323,39 +430,32 @@ Recent conversation history and evidence:
 Proposed instruction to agent: {instruction}
 
 IMPORTANT DECISION CRITERIA:
-- APPROVE if all conditions and rules are satisfied by the evidence (this enables task completion!)
-- REJECT only if critical safety conditions are violated and cannot be remedied
-- RETRY WITH MODIFICATION if conditions could be met with small changes
+- APPROVE if all rules are satisfied by the evidence (this enables task completion!)
+- REJECT if any critical safety rules are violated and cannot be remedied 
+- RETRY WITH MODIFICATION if rules could be met with small changes
 
-Check both the structured conditions AND the natural language rules. Consider:
+Consider:
 - Previous agent interactions and outputs
 - The specific instruction being given
 - The current state of the conversation
 - Any relevant context from the task
 
-REMEMBER: The goal is to enable safe task completion, not to block all actions. Approve when evidence supports safety.
+REMEMBER:
+1. The goal is to enable safe task completion, not to block all actions. Approve when evidence supports safety.
+2. Plans DO NOT reflect reality. ONLY usage based on demonstrated evidence.
 
-Output ONLY a pure JSON object with no additional text, backticks, or formatting:
-
+Example output format:
 {{
     "validation_result": {{
-        "overall_approved": true,
-        "condition_results": [
-            {{
-                "condition_id": "string",
-                "satisfied": true,
-                "reason": "Detailed explanation of why this condition is/isn't met",
-                "evidence_used": "What evidence from the context supports this decision"
-            }}
-        ],
+        "overall_approved": decision (true/false),
         "rule_results": [
             {{
                 "rule": "The natural language rule being evaluated",
-                "satisfied": true,
+                "satisfied": decision (true/false),
                 "reason": "Explanation of why this rule is/isn't satisfied"
             }}
         ],
-        "recommendation": "approve",
+        "recommendation": decision (approve/reject/retry),
         "explanation": "Overall explanation of the decision",
         "suggested_modification": "If retry recommended, what should be changed (optional)"
     }}

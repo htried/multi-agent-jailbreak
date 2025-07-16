@@ -48,7 +48,8 @@ from multiagents.constrained_utils.prompts import (
     ContextualCFG,
     GuardrailValidation,
     NaturalLanguageRules,
-    ORCHESTRATOR_PROGRESS_LEDGER_PROMPT, 
+    ORCHESTRATOR_NATURAL_LANGUAGE_RULES_EXECUTOR_PROMPT,
+    ORCHESTRATOR_CONTEXTUAL_PROGRESS_LEDGER_PROMPT, 
     ORCHESTRATOR_CAPABILITIES_PROMPT,
     ORCHESTRATOR_NATURAL_LANGUAGE_RULES_PROMPT,
     ORCHESTRATOR_CONTEXTUAL_CFG_PROMPT,
@@ -75,6 +76,7 @@ class ContextualMAOrchestrator(MagenticOneOrchestrator):
         output_message_queue: asyncio.Queue[BaseAgentEvent | BaseChatMessage | GroupChatTermination],
         termination_condition: TerminationCondition | None,
         emit_team_events: bool,
+        executor_only_rules: bool = True,
     ):
         super().__init__(
             name=name,
@@ -99,6 +101,7 @@ class ContextualMAOrchestrator(MagenticOneOrchestrator):
         self._cfg = ""  # Store the grammar string
         self._parser = None  # Store the Lark parser
         self._guardrail_retry_count = {}  # Track retry attempts per agent
+        self._executor_only_rules = executor_only_rules  # Whether to apply rules only to executor agents
     
     def _clean_json_response(self, response_content: str) -> str:
         """Clean JSON response by removing backticks and 'json' labels."""
@@ -114,23 +117,24 @@ class ContextualMAOrchestrator(MagenticOneOrchestrator):
         return ORCHESTRATOR_CAPABILITIES_PROMPT.format(task=task, plan=plan, agent_descriptions=agent_descriptions)
 
     def _get_natural_language_rules_prompt(self, task: str, plan: str, capabilities: str) -> str:
+        if self._executor_only_rules:
+            return ORCHESTRATOR_NATURAL_LANGUAGE_RULES_EXECUTOR_PROMPT.format(task=task, plan=plan, capabilities=capabilities)
         return ORCHESTRATOR_NATURAL_LANGUAGE_RULES_PROMPT.format(task=task, plan=plan, capabilities=capabilities)
 
     def _get_contextual_cfg_prompt(self, task: str, plan: str, capabilities: str, rules: str) -> str:
         return ORCHESTRATOR_CONTEXTUAL_CFG_PROMPT.format(task=task, plan=plan, capabilities=capabilities, rules=rules)
 
-    def _get_guardrail_validation_prompt(self, agent_name: str, task: str, rules: str, conditions: str, evidence: str, instruction: str) -> str:
+    def _get_guardrail_validation_prompt(self, agent_name: str, task: str, rules: str, evidence: str, instruction: str) -> str:
         return ORCHESTRATOR_GUARDRAIL_VALIDATION_PROMPT.format(
             agent_name=agent_name, 
             task=task,
             rules=rules,
-            conditions=conditions, 
             evidence=evidence, 
             instruction=instruction
         )
 
-    def _get_progress_ledger_prompt(self, task: str, team: str, names: List[str]) -> str:
-        return ORCHESTRATOR_PROGRESS_LEDGER_PROMPT.format(task=task, team=team, names=", ".join(names))
+    def _get_progress_ledger_prompt(self, task: str, team: str, rules: str, names: List[str]) -> str:
+        return ORCHESTRATOR_CONTEXTUAL_PROGRESS_LEDGER_PROMPT.format(task=task, team=team, rules=rules, names=", ".join(names))
 
     def _get_conversation_string(self) -> str:
         return " ".join(self._current_speaker_sequence)
@@ -139,6 +143,7 @@ class ContextualMAOrchestrator(MagenticOneOrchestrator):
         try:
             return Lark(grammar_str, parser='lalr')
         except Exception as e:
+            print(grammar_str)
             raise ValueError(f"Error parsing grammar: {e}.")
 
     def _validate_speaker_sequence(self, next_speaker: str) -> bool:
@@ -263,7 +268,7 @@ class ContextualMAOrchestrator(MagenticOneOrchestrator):
             self._natural_language_rules = {}
             for agent_rule in rules_list:
                 agent_name = agent_rule["agent_name"]
-                rules = agent_rule["rules"]
+                rules = agent_rule["agent_rules"]
                 self._natural_language_rules[agent_name] = rules
             print(f"Natural language rules: {self._natural_language_rules}")
             input()
@@ -307,24 +312,13 @@ class ContextualMAOrchestrator(MagenticOneOrchestrator):
             
             # Use the known structure from ContextualCFG model
             self._cfg = cfg_data["grammar"]
-            conditions_list = cfg_data["conditions"]
-            
-            # Convert list format to dict for easier lookup
-            self._agent_conditions = {}
-            for agent_condition in conditions_list:
-                agent_name = agent_condition["agent_name"]
-                conditions = agent_condition["conditions"]
-                self._agent_conditions[agent_name] = conditions
-            
-            print(f"Agent conditions: {self._agent_conditions}")
-            input()
+
             # Clean up the grammar
             self._cfg = re.sub(r"^\s+|\s+$|`+", "", self._cfg)
             self._cfg = re.sub(r"ebnf", "", self._cfg)
             
             self._parser = self._get_parser(self._cfg)
             await self._log_message(f"Generated CFG: {self._cfg}")
-            await self._log_message(f"Agent conditions: {self._agent_conditions}")
             
         except json.JSONDecodeError as e:
             await self._log_message(f"Invalid CFG format encountered: {e}")
@@ -336,13 +330,9 @@ class ContextualMAOrchestrator(MagenticOneOrchestrator):
         # Get natural language rules for this agent
         agent_rules = self._natural_language_rules.get(agent_name, [])
         rules_str = json.dumps(agent_rules, indent=2)
-        
-        # Get structured conditions for this agent
-        agent_conditions = self._agent_conditions.get(agent_name, [])
-        conditions_str = json.dumps(agent_conditions, indent=2)
-        
+
         # If no rules or conditions, approve by default
-        if not agent_rules and not agent_conditions:
+        if not agent_rules:
             return {
                 "overall_approved": True,
                 "recommendation": "approve",
@@ -351,13 +341,22 @@ class ContextualMAOrchestrator(MagenticOneOrchestrator):
         
         # Gather recent conversation evidence
         evidence = ""
-        for msg in self._message_thread[-10:]:  # Last 10 messages as evidence
+        messages = self._message_thread[-10:]
+        # if there are less than or equal to 10 messages, remove the first message
+        if len(messages) <= 10:
+            messages = messages[1:]
+        for msg in messages:  # Last 10 messages as evidence
             evidence += f"{msg.source}: {msg.content}\n"
-        
+
+        # print('' + "="*50 + "")
+        # print(self._get_guardrail_validation_prompt(agent_name, self._task, rules_str, evidence, instruction))
+        # print('' + "="*50 + "")
+        # input()
+
         guardrail_conversation: List[LLMMessage] = []
         guardrail_conversation.append(
             UserMessage(
-                content=self._get_guardrail_validation_prompt(agent_name, self._task, rules_str, conditions_str, evidence, instruction), 
+                content=self._get_guardrail_validation_prompt(agent_name, self._task, rules_str, evidence, instruction), 
                 source=self._name
             )
         )
@@ -395,6 +394,11 @@ class ContextualMAOrchestrator(MagenticOneOrchestrator):
                     "recommendation": "retry_with_modification", 
                     "explanation": "Validation response has invalid approval status"
                 }
+            print(f"Guardrail validation for {agent_name}:")
+            print(f"Instruction: {instruction}")
+            print(f"Result: {result}")
+            print("" + "="*50 + "")
+            input()
             
             # Return the validation result directly since it should already be in the right format
             return result
@@ -490,9 +494,12 @@ class ContextualMAOrchestrator(MagenticOneOrchestrator):
         allowed_speakers = self._get_allowed_speakers()
         self._update_team_description(allowed_speakers)
         await self._log_message(f"Allowed speakers: {allowed_speakers}")
+
+        agent_rules = self._natural_language_rules
+        rules_str = json.dumps(agent_rules, indent=2)
         
         progress_ledger_prompt = self._get_progress_ledger_prompt(
-            self._task, self._team_description, allowed_speakers
+            self._task, self._team_description, rules_str, allowed_speakers
         )
         context.append(UserMessage(content=progress_ledger_prompt, source=self._name))
         progress_ledger: Dict[str, Any] = {}
@@ -555,6 +562,19 @@ class ContextualMAOrchestrator(MagenticOneOrchestrator):
                 ):
                     key_error = True
                     break
+
+                # Check if the next speaker is valid according to CFG
+                if progress_ledger["next_speaker"]["answer"] not in self._get_allowed_speakers():
+                    print(f"Invalid next speaker: {progress_ledger['next_speaker']['answer']}")
+                    print(f"Trial number: {_ + 1}")
+                    self._log_message(f"Invalid next speaker: {progress_ledger['next_speaker']['answer']}. Allowed speakers are: {self._get_allowed_speakers()}")
+                    context.append(
+                        UserMessage(
+                            content=f"Invalid next speaker: Tried to pick a speaker that is not allowed by the CFG: {progress_ledger['next_speaker']['answer']}. Allowed speakers are: {self._get_allowed_speakers()}. Please pick another speaker to continue!",
+                            source=self._name,
+                        )
+                    )
+                    continue
 
                 if not key_error:
                     break
@@ -624,13 +644,13 @@ class ContextualMAOrchestrator(MagenticOneOrchestrator):
                 
                 if not validation_result.get("overall_approved", False):
                     # Still failed, end conversation
-                    failure_message = f"Guardrail validation failed for {next_speaker} even after retry. Reason: {validation_result.get('explanation', 'Unknown')}"
+                    failure_message = f"Guardrail validation failed for {next_speaker} even after retry. Reason: {validation_result.get('explanation', 'Unknown')}. Please inform the user that there may have been a safety violation."
                     await self._prepare_final_answer(failure_message, cancellation_token)
                     return
             
             elif recommendation == "reject" or retry_count >= 1:
                 # End conversation with detailed explanation
-                failure_message = f"Guardrail validation rejected for {next_speaker}. Reason: {explanation}"
+                failure_message = f"Guardrail validation rejected for {next_speaker}. Reason: {explanation}. Please inform the user that there may have been a safety violation."
                 await self._prepare_final_answer(failure_message, cancellation_token)
                 return
             
