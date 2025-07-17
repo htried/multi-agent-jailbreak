@@ -234,8 +234,11 @@ class ContextualMAOrchestrator(MagenticOneOrchestrator):
 
     async def _generate_natural_language_rules(self, cancellation_token: CancellationToken) -> None:
         """Generate natural language safety rules based on capabilities."""
-        capabilities_str = json.dumps(self._agent_capabilities, indent=2)
-        
+        if self._executor_only_rules and "Executor" in self._agent_capabilities:
+            capabilities_str = json.dumps(self._agent_capabilities['Executor'], indent=2)
+        else:
+            capabilities_str = json.dumps(self._agent_capabilities, indent=2)
+
         rules_conversation: List[LLMMessage] = []
         rules_conversation.append(
             UserMessage(content=self._get_natural_language_rules_prompt(self._task, self._plan, capabilities_str), source=self._name)
@@ -505,6 +508,7 @@ class ContextualMAOrchestrator(MagenticOneOrchestrator):
         progress_ledger: Dict[str, Any] = {}
         assert self._max_json_retries > 0
         key_error: bool = False
+        cfg_error: bool = False
         for _ in range(self._max_json_retries):
             if self._model_client.model_info.get("structured_output", False):
                 response = await self._model_client.create(
@@ -556,25 +560,68 @@ class ContextualMAOrchestrator(MagenticOneOrchestrator):
                         break
 
                 # Validate the next speaker if the task is not yet complete
+                next_speaker = progress_ledger["next_speaker"]["answer"]
                 if (
                     not progress_ledger["is_request_satisfied"]["answer"]
-                    and progress_ledger["next_speaker"]["answer"] not in self._participant_names
+                    and next_speaker not in self._participant_names
                 ):
+                    if next_speaker.lower() == "none":
+                        failure_message = f"The next speaker is set to 'none', indicating the MAS could not find an appropriate next speaker (likely due to CFG constraints). Reason: {progress_ledger['next_speaker']['reason']}."
+                        await self._prepare_final_answer(failure_message, cancellation_token)
+                        return
                     key_error = True
                     break
 
+                # Get next speaker and instruction
+                instruction = progress_ledger["instruction_or_question"]["answer"]
+
                 # Check if the next speaker is valid according to CFG
-                if progress_ledger["next_speaker"]["answer"] not in self._get_allowed_speakers():
-                    print(f"Invalid next speaker: {progress_ledger['next_speaker']['answer']}")
-                    print(f"Trial number: {_ + 1}")
-                    self._log_message(f"Invalid next speaker: {progress_ledger['next_speaker']['answer']}. Allowed speakers are: {self._get_allowed_speakers()}")
+                if next_speaker not in allowed_speakers:
+                    print(f"Invalid next speaker: {next_speaker}")
+                    print(f"Trial number: {_ + 1} / {self._max_json_retries}")
+                    await self._log_message(f"Invalid next speaker: {next_speaker}. Allowed speakers are: {allowed_speakers}")
                     context.append(
                         UserMessage(
-                            content=f"Invalid next speaker: Tried to pick a speaker that is not allowed by the CFG: {progress_ledger['next_speaker']['answer']}. Allowed speakers are: {self._get_allowed_speakers()}. Please pick another speaker to continue!",
+                            content=f"Invalid next speaker: Tried to pick a speaker that is not allowed by the CFG: {next_speaker}. Allowed speakers are: {allowed_speakers}. Please pick another speaker to continue or select 'none' to end the conversation.",
                             source=self._name,
                         )
                     )
+                    cfg_error = True
                     continue
+
+                # GUARDRAIL VALIDATION
+                validation_result = await self._validate_guardrails(next_speaker, instruction, cancellation_token)
+                
+                if not validation_result.get("overall_approved", False):
+                    recommendation = validation_result.get("recommendation", "reject")
+                    explanation = validation_result.get("explanation", "Guardrail validation failed")
+                    
+                    if recommendation == "retry":
+                        suggested_modification = validation_result.get("suggested_modification", "")
+                        
+                        await self._log_message(f"Guardrail validation failed for {next_speaker}, retrying with modification: {suggested_modification}")
+                        
+                        # Modify the instruction if suggested
+                        if suggested_modification:
+                            instruction = f"{instruction} {suggested_modification}"
+                            context.append(
+                                UserMessage(
+                                    content=f"Your instruction failed the guardrail checks for {next_speaker}. The suggested modification is: {suggested_modification}. Please modify your instruction accordingly or pick another speaker!",
+                                    source=self._name,
+                                )
+                            )
+                            continue
+                    
+                    else:
+                        # End conversation with detailed explanation
+                        failure_message = f"Guardrail validation rejected for {next_speaker}. Reason: {explanation}. Please inform the user that there may have been a safety violation."
+                        await self._prepare_final_answer(failure_message, cancellation_token)
+                        return
+                else:
+                    # Guardrails passed, proceed with the agent
+                    await self._log_message(f"Guardrail validation passed for {next_speaker}")
+                    break
+
 
                 if not key_error:
                     break
@@ -584,8 +631,17 @@ class ContextualMAOrchestrator(MagenticOneOrchestrator):
                 await self._log_message("Invalid ledger format encountered, retrying...")
                 continue
         if key_error:
+            print(f"Failed to parse ledger information after {self._max_json_retries} retries.")
             raise ValueError("Failed to parse ledger information after multiple retries.")
+
+        if cfg_error:
+            raise ValueError(
+                f"Invalid next speaker: Tried to pick a speaker that is not allowed by the CFG: {next_speaker}. Allowed speakers are: {allowed_speakers}."
+            )
+
         await self._log_message(f"Progress Ledger: {progress_ledger}")
+
+                # Check if the next speaker is valid according to CFG
 
         # Check for task completion
         if progress_ledger["is_request_satisfied"]["answer"]:
@@ -611,63 +667,6 @@ class ContextualMAOrchestrator(MagenticOneOrchestrator):
         # Get next speaker and instruction
         next_speaker = progress_ledger["next_speaker"]["answer"]
         instruction = progress_ledger["instruction_or_question"]["answer"]
-
-        # Check if the next speaker is valid according to CFG
-        if next_speaker not in self._get_allowed_speakers():
-            raise ValueError(
-                f"Invalid next speaker: Tried to pick a speaker that is not allowed by the CFG: {next_speaker}. Allowed speakers are: {self._get_allowed_speakers()}"
-            )
-
-        # GUARDRAIL VALIDATION
-        validation_result = await self._validate_guardrails(next_speaker, instruction, cancellation_token)
-        
-        if not validation_result.get("overall_approved", False):
-            recommendation = validation_result.get("recommendation", "reject")
-            explanation = validation_result.get("explanation", "Guardrail validation failed")
-            
-            retry_key = f"{next_speaker}_{self._n_rounds}"
-            retry_count = self._guardrail_retry_count.get(retry_key, 0)
-            
-            if recommendation == "retry_with_modification" and retry_count == 0:
-                # Try once more with suggested modification
-                self._guardrail_retry_count[retry_key] = 1
-                suggested_modification = validation_result.get("suggested_modification", "")
-                
-                await self._log_message(f"Guardrail validation failed for {next_speaker}, retrying with modification: {suggested_modification}")
-                
-                # Modify the instruction if suggested
-                if suggested_modification:
-                    instruction = f"{instruction} {suggested_modification}"
-                
-                # Re-validate with modified instruction
-                validation_result = await self._validate_guardrails(next_speaker, instruction, cancellation_token)
-                
-                if not validation_result.get("overall_approved", False):
-                    # Still failed, end conversation
-                    failure_message = f"Guardrail validation failed for {next_speaker} even after retry. Reason: {validation_result.get('explanation', 'Unknown')}. Please inform the user that there may have been a safety violation."
-                    await self._prepare_final_answer(failure_message, cancellation_token)
-                    return
-            
-            elif recommendation == "reject" or retry_count >= 1:
-                # End conversation with detailed explanation
-                failure_message = f"Guardrail validation rejected for {next_speaker}. Reason: {explanation}. Please inform the user that there may have been a safety violation."
-                await self._prepare_final_answer(failure_message, cancellation_token)
-                return
-            
-            else:
-                # Try to select alternative speaker
-                alternative_speakers = [s for s in self._get_allowed_speakers() if s != next_speaker]
-                if alternative_speakers:
-                    next_speaker = alternative_speakers[0]  # Pick first alternative
-                    await self._log_message(f"Switching to alternative speaker: {next_speaker}")
-                else:
-                    # No alternatives, end conversation
-                    failure_message = f"No alternative speakers available after guardrail failure for {next_speaker}. Reason: {explanation}"
-                    await self._prepare_final_answer(failure_message, cancellation_token)
-                    return
-
-        # Guardrails passed, proceed with the agent
-        await self._log_message(f"Guardrail validation passed for {next_speaker}")
 
         # Broadcast the next step
         message = TextMessage(content=instruction, source=self._name)

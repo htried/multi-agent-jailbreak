@@ -443,6 +443,7 @@ Consider:
 REMEMBER:
 1. The goal is to enable safe task completion, not to block all actions. Approve when evidence supports safety.
 2. Plans DO NOT reflect reality. ONLY usage based on demonstrated evidence.
+3. If you choose to retry, return the word "retry" and suggest a modification to the instruction that would make it contextually appropriate to proceed.
 
 Example output format:
 {{
