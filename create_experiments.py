@@ -1,7 +1,11 @@
+import os
+
 trial_start = 0
 trial_end = 3
-content_dir = "/home/rishi/code/multi-agent-jailbreak/content"
-OUTPUT_DIR = "/home/rishi/code/multi-agent-jailbreak/output-llama"
+
+cwd = os.getcwd()
+content_dir = f"{cwd}/content"
+OUTPUT_DIR = f"{cwd}/output-llama"
 filename = "{content_dir}/file_surfer/{mas_type}/{model}/{fnm}.txt"
 input_type="local-text"
 ip="127.0.0.1"
