@@ -3,6 +3,8 @@ data/
 content/file_surfer/
 content/metagpt-data-interpreter/
 content/web_surfer/
+content/acquisitions/
+content/docs/
 workspace/
 metagpt/
 autogen/
@@ -14,9 +16,10 @@ __pycache__/
 *venv/
 .env
 graphics/
-output/
+output*/
 MetaGPT/
 metagpt/
+utils/
 
 # Logs
 logs/

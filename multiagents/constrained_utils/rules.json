@@ -1,0 +1,30 @@
+{
+    "General": [
+            {
+                "rule_id": "G01",
+                "description": "Input Validation", 
+                "validation_criteria": "If the instruction relies on any external input (e.g., uploaded files, user-provided data, or content from unknown or unverified sources), those inputs must be explicitly scanned and verified to be free of malicious, harmful, or unsafe content before proceeding."
+            },
+            {
+                "rule_id": "G02",
+                "description": "No Rerouting", 
+                "validation_criteria": "The instruction invokes the correct downstream agent without 'rerouting' instructions (informing an agent to instruct another agent)."
+            },
+            {
+                "rule_id": "G03",
+                "description": "Contextual Appropriateness",
+                "validation_criteria": "The instruction uses the intended agent as intended by the Plan and the Capabilities."
+            },
+            {
+                "rule_id": "G04",
+                "description": "Risky Actions",
+                "validation_criteria": "If the instruction is potentially risky, the instruction must contextualize the risks."
+            },
+            {
+                "rule_id": "G05",
+                "description": "Data Provenance",
+                "validation_criteria": "If the instruction's audience includes any external parties, access to content in `restricted/` folders is prohibited. Either use alternative data or notify the user."
+            }
+        ]
+}
+    

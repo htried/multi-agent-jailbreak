@@ -4,13 +4,18 @@ import os
 from dotenv import load_dotenv
 from autogen_core.models import ModelFamily
 from autogen_ext.models.openai import OpenAIChatCompletionClient
+from multiagents.llama_magentic_one import LlamaMagenticOne
 from multiagents.magentic_one import MagenticOne
+from multiagents.contextual_magentic_one import ContextualMagenticOne
 from multiagents.round_robin import RoundRobin
 from multiagents.selector import Selector
 from autogen_agentchat import EVENT_LOGGER_NAME
 from autogen_agentchat.ui import Console
 import logging
 from logging.handlers import RotatingFileHandler
+
+from azure.identity import DefaultAzureCredential, get_bearer_token_provider
+from autogen_ext.models.openai import AzureOpenAIChatCompletionClient
 
 load_dotenv()
 
@@ -24,14 +29,40 @@ async def main(
     input_type: str,
     error_type: str,
     query_num: int,
-    trial_num: int
+    trial_num: int,
+    office_mode: bool
 ) -> None:
     try:
-        if 'gpt-' in model or 'o1' in model or 'o3' in model:
-            client = OpenAIChatCompletionClient(
-                api_key=os.environ["OPENAI_API_KEY"],
-                model=model
-            )
+        if 'gpt-' in model or 'o1' in model or 'o3' in model or 'o4-mini' in model:
+            # Create the OpenAI client
+            if "OPENAI_API_KEY" in os.environ:
+                client = OpenAIChatCompletionClient(
+                    api_key=os.environ["OPENAI_API_KEY"],
+                    model='gpt-4o'
+                )
+
+                orchestrator_client = OpenAIChatCompletionClient(
+                    api_key=os.environ["OPENAI_API_KEY"],
+                    model=model
+                )
+            else:
+                token_provider = get_bearer_token_provider(
+                    DefaultAzureCredential(), "https://cognitiveservices.azure.com/.default"
+                )
+
+                client = AzureOpenAIChatCompletionClient(
+                    model="gpt-4o",
+                    api_version="2024-10-21",
+                    azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
+                    azure_ad_token_provider=token_provider,
+                )
+
+                orchestrator_client = AzureOpenAIChatCompletionClient(
+                    model=model,
+                    api_version="2024-12-01-preview",
+                    azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
+                    azure_ad_token_provider=token_provider,
+                )
         elif 'gemini' in model or 'gemma' in model:
             client = OpenAIChatCompletionClient(
                 model=model,
@@ -57,7 +88,35 @@ async def main(
                     input_type=input_type,
                     error_type=error_type,
                     query_num=query_num,
-                    trial_num=trial_num
+                    trial_num=trial_num,
+                    office_mode=office_mode,
+                    orchestrator_client=orchestrator_client
+                )
+            elif mas_type == "contextual-magentic-one":
+                agent = ContextualMagenticOne(
+                    client=client,
+                    hil_mode=hil_mode,
+                    include_web_surfer=include_web_surfer,
+                    include_video_surfer=include_video_surfer,
+                    input_type=input_type,
+                    error_type=error_type,
+                    query_num=query_num,
+                    trial_num=trial_num,
+                    office_mode=office_mode,
+                    orchestrator_client=orchestrator_client
+                )
+            elif mas_type == "llama-magentic-one":
+                agent = LlamaMagenticOne(
+                    client=client,
+                    hil_mode=hil_mode,
+                    include_web_surfer=include_web_surfer,
+                    include_video_surfer=include_video_surfer,
+                    input_type=input_type,
+                    error_type=error_type,
+                    query_num=query_num,
+                    trial_num=trial_num,
+                    office_mode=office_mode,
+                    orchestrator_client=orchestrator_client
                 )
             elif mas_type == "round-robin":
                 agent = RoundRobin(
@@ -141,6 +200,7 @@ if __name__ == "__main__":
     parser.add_argument("--error_type", type=str, help="Type of error to use for the query")
     parser.add_argument("--query_num", type=int, help="Which query to run")
     parser.add_argument("--trial_num", type=int, help="Which trial to run")
+    parser.add_argument("--office_mode", action="store_true", default=False, help="Run in office mode")
     args = parser.parse_args()
 
     # Validate query arguments
@@ -174,5 +234,6 @@ if __name__ == "__main__":
         args.input_type,
         args.error_type,
         args.query_num,
-        args.trial_num
+        args.trial_num,
+        args.office_mode
     ))
